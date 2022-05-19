@@ -1,0 +1,5 @@
+[
+	{ "caption": "CMakeTools: Create Project", "command": "cmake_tools_create_project" },
+	{ "caption": "CMakeTools: Generate Project", "command": "cmake_tools_generate_project" },
+	{ "caption": "CMakeTools: Build Project", "command": "cmake_tools_build_project" },
+]
