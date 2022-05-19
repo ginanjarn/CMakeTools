@@ -52,8 +52,8 @@ def exec_subprocess(
     if input is not None:
         input = input.encode()
 
-    def normalize_newline(src:bytes):
-        return src.replace(b"\r\n",b"\n")
+    def normalize_newline(src: bytes):
+        return src.replace(b"\r\n", b"\n")
 
     sout, serr = process.communicate(input)
     sout = normalize_newline(sout)
@@ -68,7 +68,7 @@ CACHE_DIRECTORY = (
 if os.name != "nt":
     CACHE_DIRECTORY = pathlib.Path().home().joinpath(CACHE_DIRECTORY_NAME)
 
-generator_pattern = re.compile(r"^[\* ] ([A-Z][\w ]+)")
+generator_pattern = re.compile(r"^[\* ] ((?:[A-Z][\w ]+|\- |\d+ )+)")
 
 
 def scan_generators() -> Iterable[str]:
