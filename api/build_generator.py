@@ -272,7 +272,7 @@ def cmakelists_snippet(name: str, project_type: int, version: Optional[str] = No
     snippet = StringIO()
 
     snippet.write(
-        "cmake_minimum_required(VERSION 3.0.0)\n"
+        "cmake_minimum_required(VERSION 3.10)\n"
         f"project({name} VERSION {version})\n\n"
         "include(CTest)\nenable_testing()\n\n"
     )
