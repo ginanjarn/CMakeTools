@@ -5,14 +5,18 @@ import os
 import re
 import threading
 from dataclasses import dataclass
+from typing import Iterable, Optional, Any
 
 import sublime
 import sublime_plugin
 
 from .api import build_generator
+from .api import cmake_script
+
+from .third_party import mistune
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.DEBUG)  # module logging level
+# LOGGER.setLevel(logging.DEBUG)  # module logging level
 STREAM_HANDLER = logging.StreamHandler()
 LOG_TEMPLATE = "%(levelname)s %(asctime)s %(filename)s:%(lineno)s  %(message)s"
 STREAM_HANDLER.setFormatter(logging.Formatter(LOG_TEMPLATE))
@@ -268,3 +272,121 @@ class CmakeToolsBuildProjectCommand(sublime_plugin.TextCommand):
 
         thread = threading.Thread(target=build)
         thread.start()
+
+
+PIPE_LOCK = threading.Lock()
+
+
+def pipe(func):
+    def wrapper(*args, **kwargs):
+        if PIPE_LOCK.locked():
+            return None
+
+        with PIPE_LOCK:
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
+def is_cmake_code(view: sublime.View):
+    """view is cmake code"""
+
+    if valid := view.match_selector(0, "source.cmake"):
+        return valid
+    if valid := view.match_selector(0, "source.cmakecache"):
+        return valid
+
+    return False
+
+
+KIND_MAP = {
+    cmake_script.NameKind.COMMAND.value: sublime.KIND_FUNCTION,
+    cmake_script.NameKind.MODULE.value: sublime.KIND_NAMESPACE,
+    cmake_script.NameKind.POLICY.value: sublime.KIND_VARIABLE,
+    cmake_script.NameKind.PROPERTY.value: sublime.KIND_VARIABLE,
+    cmake_script.NameKind.VARIABLE.value: sublime.KIND_VARIABLE,
+}
+
+
+class CompletionItem(sublime.CompletionItem):
+    @classmethod
+    def from_base_name(cls, name: cmake_script.BaseName):
+        return cls(
+            trigger=name.name, kind=KIND_MAP.get(name.kind, sublime.KIND_AMBIGUOUS)
+        )
+
+
+class EventListener(sublime_plugin.EventListener):
+    def __init__(self):
+        self._completion_result = None
+
+    def trigger_completion(self, view: sublime.View):
+        view.run_command("hide_auto_complete")
+        view.run_command(
+            "auto_complete",
+            {
+                "disable_auto_insert": True,
+                "next_completion_if_showing": False,
+                "auto_complete_commit_on_tab": True,
+            },
+        )
+
+    def on_query_completions(
+        self, view: sublime.View, prefix: Any, locations: Any
+    ) -> Optional[Iterable[Any]]:
+        """on query completion"""
+
+        if not is_cmake_code(view):
+            return
+
+        if self._completion_result:
+            result = self._completion_result
+            self._completion_result = None
+            return sublime.CompletionList(
+                result,
+                sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS,
+            )
+
+        thread = threading.Thread(
+            target=self.get_completion_task, args=(view, locations[0])
+        )
+        thread.start()
+
+    @pipe
+    def get_completion_task(self, view: sublime.View, point: int):
+
+        source = view.substr(sublime.Region(0, point))
+        row, col = view.rowcol(point)
+        completions = cmake_script.complete(source, row, col)
+
+        if completions:
+            self._completion_result = [
+                CompletionItem.from_base_name(completion) for completion in completions
+            ]
+
+            self.trigger_completion(view)
+
+    def on_hover(self, view: sublime.View, point: int, hover_zone: int):
+        """on hover"""
+        if not is_cmake_code(view):
+            return
+
+        if hover_zone == sublime.HOVER_TEXT:
+            thread = threading.Thread(target=self.get_help_task, args=(view, point))
+            thread.start()
+
+    @pipe
+    def get_help_task(self, view: sublime.View, point: int):
+        end_point = view.word(point).b
+        source = view.substr(sublime.Region(0, end_point))
+        row, col = view.rowcol(end_point)
+        doc = cmake_script.documentation(source, row, col)
+        if doc:
+            content = doc.help
+            content = mistune.markdown(content)
+            view.show_popup(
+                content,
+                location=point,
+                flags=sublime.HIDE_ON_MOUSE_MOVE_AWAY,
+                max_width=1024,
+            )

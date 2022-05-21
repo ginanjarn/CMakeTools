@@ -11,7 +11,7 @@ from io import StringIO
 from typing import Iterable, Tuple, List, Optional, Dict, Any
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.DEBUG)  # module logging level
+# LOGGER.setLevel(logging.DEBUG)  # module logging level
 STREAM_HANDLER = logging.StreamHandler()
 LOG_TEMPLATE = "%(levelname)s %(asctime)s %(filename)s:%(lineno)s  %(message)s"
 STREAM_HANDLER.setFormatter(logging.Formatter(LOG_TEMPLATE))
