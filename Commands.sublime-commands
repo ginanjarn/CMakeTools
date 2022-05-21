@@ -1,4 +1,0 @@
-[
-	{ "caption": "CMakeTools: New Project", "command": "cmake_bootstrap" },
-	{ "caption": "CMakeTools: Generate Build", "command": "cmake_generate" },
-]
