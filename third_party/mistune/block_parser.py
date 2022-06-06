@@ -55,7 +55,7 @@ class BlockParser(ScannerParser):
         r' {0,3}(#{1,6})(?!#+)(?: *\n+|'
         r'\s+([^\n]*?)(?:\n+|\s+?#+\s*\n+))'
     )
-    SETEX_HEADING = re.compile(r'([^\n]+)\n *(=|-){2,}[ \t]*\n+')
+    SETEX_HEADING = re.compile(r'([^\n]+)\n *(=|-|\^){2,}[ \t]*\n+') # set '^' character as heading
     THEMATIC_BREAK = re.compile(
         r' {0,3}((?:-[ \t]*){3,}|'
         r'(?:_[ \t]*){3,}|(?:\*[ \t]*){3,})\n+'
