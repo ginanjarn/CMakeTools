@@ -92,19 +92,18 @@ class CmakeToolsCreateProjectCommand(sublime_plugin.TextCommand):
         thread.start()
 
 
-def progress(title: str):
-    def wraps(func):
-        def wrapper(*args, **kwargs):
-            return func(args, kwargs)
+class WindowStatus:
+    _key = "cmaketools"
 
-        return wrapper
+    @staticmethod
+    def set(message: str):
+        view = sublime.active_window().active_view()
+        view.set_status(WindowStatus._key, f"CMakeTools: {message}. ")
 
-    try:
-        view: sublime.View = sublime.active_window().active_view()
-        view.set_status("CMAKE_PROGRESS", f"CMake Tools: {title}")
-        return wraps
-    finally:
-        view.erase_status("CMAKE_PROGRESS")
+    @staticmethod
+    def clear():
+        for view in sublime.active_window().views():
+            view.erase_status(WindowStatus._key)
 
 
 class CmakeToolsGenerateProjectCommand(sublime_plugin.TextCommand):
@@ -193,6 +192,7 @@ class CmakeToolsGenerateProjectCommand(sublime_plugin.TextCommand):
         def generate():
             LOGGER.debug("generate")
             try:
+                WindowStatus.set("generate project")
                 result = build_generator.generate_project(
                     self.project.path,
                     generator=self.project.generator,
@@ -206,6 +206,7 @@ class CmakeToolsGenerateProjectCommand(sublime_plugin.TextCommand):
                 self.offer_create_snippet(result)
             finally:
                 LOGGER.debug("finish generate")
+                WindowStatus.clear()
 
         thread = threading.Thread(target=generate)
         thread.start()
@@ -260,6 +261,7 @@ class CmakeToolsBuildProjectCommand(sublime_plugin.TextCommand):
         def build():
             LOGGER.debug("start build")
             try:
+                WindowStatus.set("build project")
                 result = build_generator.build(
                     self.project.path, self.project.build_mode
                 )
@@ -269,6 +271,7 @@ class CmakeToolsBuildProjectCommand(sublime_plugin.TextCommand):
                 print(result)
             finally:
                 LOGGER.debug("finish build")
+                WindowStatus.clear()
 
         thread = threading.Thread(target=build)
         thread.start()
