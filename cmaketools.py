@@ -1,6 +1,7 @@
 """cmake tools"""
 
 import threading
+from pathlib import Path
 from functools import wraps
 from typing import List
 
@@ -9,10 +10,32 @@ import sublime_plugin
 from sublime import HoverZone
 
 from . import api
+from .api import cmake_build
 
 
 def valid_context(view: sublime.View, point: int) -> bool:
     return view.match_selector(point, "source.cmake")
+
+
+def valid_build(view: sublime.View, point: int = 0):
+    return any(
+        [
+            view.match_selector(point, "source.cmake"),
+            view.match_selector(point, "source.c++"),
+            view.match_selector(point, "source.c"),
+        ]
+    )
+
+
+def get_workspace_path(view: sublime.View) -> str:
+    window = view.window()
+    file_name = view.file_name()
+
+    if folders := [
+        folder for folder in window.folders() if file_name.startswith(folder)
+    ]:
+        return max(folders)
+    return str(Path(file_name).parent)
 
 
 class ViewEventListener(sublime_plugin.ViewEventListener):
@@ -110,3 +133,70 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
                 "auto_complete_commit_on_tab": True,
             },
         )
+
+
+class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
+    """"""
+
+    def run(self, edit: sublime.Edit, build_type: str = ""):
+        workspace_path = get_workspace_path(self.view)
+        thread = threading.Thread(
+            target=cmake_build.configure,
+            kwargs={"source_dir": workspace_path, "build_type": build_type},
+        )
+        thread.start()
+
+    def is_visible(self):
+        return valid_build(self.view)
+
+
+class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
+    """"""
+
+    def run(self, edit: sublime.Edit, build_type: str = ""):
+        if build_type:
+            self._build(build_type)
+        else:
+            self.select_build_type()
+
+    def select_build_type(self):
+        build_types = cmake_build.BUILD_TYPES
+
+        def build_with_type(index):
+            if index < 0:
+                return
+            self._build(build_types[index])
+
+        self.view.window().show_quick_panel(
+            build_types, selected_index=0, on_select=build_with_type
+        )
+
+    def _build(self, build_type):
+        workspace_path = get_workspace_path(self.view)
+
+        thread = threading.Thread(
+            target=cmake_build.build,
+            kwargs={
+                "build_dir": str(Path(workspace_path).joinpath("build")),
+                "build_type": build_type,
+            },
+        )
+        thread.start()
+
+    def is_visible(self):
+        return valid_build(self.view)
+
+
+class CmaketoolsCtestCommand(sublime_plugin.TextCommand):
+    """"""
+
+    def run(self, edit: sublime.Edit, build_type: str = ""):
+        workspace_path = get_workspace_path(self.view)
+        thread = threading.Thread(
+            target=cmake_build.ctest,
+            kwargs={"source_dir": workspace_path, "build_type": build_type},
+        )
+        thread.start()
+
+    def is_visible(self):
+        return valid_build(self.view)

@@ -1,0 +1,30 @@
+[
+	{
+		"caption": "CMake: Configure...",
+		"command": "cmaketools_configure"
+	},
+	{
+		"caption": "CMake: Build...",
+		"command": "cmaketools_build"
+	},
+	{
+		"args":
+		{
+			"build_type": "Debug"
+		},
+		"caption": "CMake: Build (Debug)",
+		"command": "cmaketools_build"
+	},
+	{
+		"args":
+		{
+			"build_type": "Debug"
+		},
+		"caption": "CMake: Build (Release)",
+		"command": "cmaketools_build"
+	},
+	{
+		"caption": "CMake: CTest",
+		"command": "cmaketools_ctest"
+	}
+]
