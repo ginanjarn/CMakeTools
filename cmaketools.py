@@ -10,7 +10,7 @@ import sublime_plugin
 from sublime import HoverZone
 
 from . import api
-from .api import cmake_build
+from .api import cmake_build, quickstart_generator
 
 
 def valid_context(view: sublime.View, point: int) -> bool:
@@ -200,3 +200,62 @@ class CmaketoolsCtestCommand(sublime_plugin.TextCommand):
 
     def is_visible(self):
         return valid_build(self.view)
+
+
+class CmaketoolsQuickstartCommand(sublime_plugin.TextCommand):
+    """"""
+
+    def run(self, edit: sublime.Edit, project_type: str = ""):
+
+        self.workspace_path = get_workspace_path(self.view)
+        self.project_type = project_type
+        self.project_name = ""
+
+        self.get_projecttype_event = threading.Event()
+        self.input_projectname_event = threading.Event()
+
+        thread = threading.Thread(target=self.build_steps)
+        thread.start()
+
+    def build_steps(self):
+
+        self.get_project_type()
+        self.get_projecttype_event.wait()
+        if not self.project_type:
+            return
+
+        self.input_project_name()
+        self.input_projectname_event.wait()
+        if not self.project_name:
+            return
+
+        self.generate()
+
+    def input_project_name(self):
+        def set_project_name(name):
+            if name:
+                self.project_name = name
+            self.input_projectname_event.set()
+
+        preferred_name = Path(self.workspace_path).name
+        self.view.window().show_input_panel(
+            "Project name", preferred_name, set_project_name, None, None
+        )
+
+    def get_project_type(self):
+        project_types = quickstart_generator.PROJECT_TYPES
+
+        def select_type(index):
+            if index > -1:
+                self.project_type = project_types[index]
+            self.get_projecttype_event.set()
+
+        self.view.window().show_quick_panel(project_types, select_type)
+
+    def generate(self):
+
+        quickstart_generator.generate_quickstart(
+            workspace_path=self.workspace_path,
+            project_type=self.project_type,
+            project_name=self.project_name,
+        )

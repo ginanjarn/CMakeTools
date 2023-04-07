@@ -1,5 +1,9 @@
 [
 	{
+		"caption": "CMake: Quickstart...",
+		"command": "cmaketools_quickstart"
+	},
+	{
 		"caption": "CMake: Configure...",
 		"command": "cmaketools_configure"
 	},
