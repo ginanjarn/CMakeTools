@@ -134,6 +134,18 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
             },
         )
 
+    project_configured = False
+
+    def on_activated(self):
+        if not valid_context(self.view, 0):
+            return
+
+        if self.project_configured:
+            return
+
+        self.view.run_command("cmaketools_configure")
+        self.project_configured = True
+
 
 class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
     """"""
