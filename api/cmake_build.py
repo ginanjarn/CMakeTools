@@ -91,7 +91,7 @@ def configure(
     command = [
         "cmake",
         "--no-warn-unused-cli",
-        "-DCMAKE_EXPORT_COMPILE_command:BOOL=TRUE",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE",
         f"-DCMAKE_BUILD_TYPE:STRING={build_type}",
         # r"-DCMAKE_C_COMPILER:FILEPATH=C:\TDM-GCC-64\bin\x86_64-w64-mingw32-gcc.exe",
         # r"-DCMAKE_CXX_COMPILER:FILEPATH=C:\TDM-GCC-64\bin\x86_64-w64-mingw32-g++.exe",
