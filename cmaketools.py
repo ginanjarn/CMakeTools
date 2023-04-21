@@ -271,3 +271,6 @@ class CmaketoolsQuickstartCommand(sublime_plugin.TextCommand):
             project_type=self.project_type,
             project_name=self.project_name,
         )
+
+    def is_visible(self):
+        return valid_build(self.view)
