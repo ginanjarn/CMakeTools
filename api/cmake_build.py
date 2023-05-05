@@ -78,27 +78,23 @@ BUILD_TYPES = [
 ]
 
 
-def configure(
-    source_dir: PathStr,
-    build_dir: PathStr = "",
-    build_type: BuildTypeStr = "",
-):
+def configure(source_dir: PathStr, cc_path: PathStr, cxx_path: PathStr, generator: str):
     """configure project"""
 
-    build_dir = build_dir or f"{source_dir}/build"
-    build_type = build_type or "Debug"
+    source_dir = Path(source_dir)
+    build_dir = source_dir.joinpath("build")
 
     command = [
         "cmake",
         "--no-warn-unused-cli",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE",
-        f"-DCMAKE_BUILD_TYPE:STRING={build_type}",
-        # r"-DCMAKE_C_COMPILER:FILEPATH=C:\TDM-GCC-64\bin\x86_64-w64-mingw32-gcc.exe",
-        # r"-DCMAKE_CXX_COMPILER:FILEPATH=C:\TDM-GCC-64\bin\x86_64-w64-mingw32-g++.exe",
-        f"-S{Path(source_dir).as_posix()}",
-        f"-B{Path(build_dir).as_posix()}",
+        "-DCMAKE_BUILD_TYPE:STRING=Debug",
+        f"-DCMAKE_C_COMPILER:FILEPATH={cc_path}",
+        f"-DCMAKE_CXX_COMPILER:FILEPATH={cxx_path}",
+        f"-S{source_dir.as_posix()}",
+        f"-B{build_dir.as_posix()}",
         "-G",
-        "MinGW Makefiles",
+        generator,
     ]
 
     ret = exec_cmd_nobuffer(command)

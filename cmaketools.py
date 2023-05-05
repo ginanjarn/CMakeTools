@@ -1,5 +1,6 @@
 """cmake tools"""
 
+import os
 import threading
 from pathlib import Path
 from functools import wraps
@@ -10,7 +11,7 @@ import sublime_plugin
 from sublime import HoverZone
 
 from . import api
-from .api import cmake_build, quickstart_generator
+from .api import cmake_build, quickstart_generator, compiler_kit
 
 
 def valid_context(view: sublime.View, point: int) -> bool:
@@ -134,29 +135,163 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
             },
         )
 
-    project_configured = False
+    # project_configured = False
 
-    def on_activated(self):
-        if not valid_context(self.view, 0):
+    # def on_activated(self):
+    #     if not valid_context(self.view, 0):
+    #         return
+
+    #     if self.project_configured:
+    #         return
+
+    #     self.view.run_command("cmaketools_configure")
+    #     self.project_configured = True
+
+
+CC_KEY = "c"
+CXX_KEY = "cxx"
+GENERATOR_KEY = "generator"
+
+
+class Preferences:
+    """preference manager"""
+
+    base_name = "CMakeTools.sublime-settings"
+
+    def load_settings(self):
+        return sublime.load_settings(self.base_name)
+
+    def save_settings(self):
+        return sublime.save_settings(self.base_name)
+
+    def set_compiler(self, compiler: compiler_kit.Compiler):
+        self.c_compiler = compiler.cc
+        self.cxx_compiler = compiler.cxx
+        self.generator = compiler.generator
+
+    @property
+    def c_compiler(self):
+        return self.load_settings().get(CC_KEY)
+
+    @c_compiler.setter
+    def c_compiler(self, value):
+        self.load_settings().set(CC_KEY, value)
+        self.save_settings()
+
+    @property
+    def cxx_compiler(self):
+        return self.load_settings().get(CXX_KEY)
+
+    @cxx_compiler.setter
+    def cxx_compiler(self, value):
+        self.load_settings().set(CXX_KEY, value)
+        self.save_settings()
+
+    @property
+    def generator(self):
+        return self.load_settings().get(GENERATOR_KEY)
+
+    @generator.setter
+    def generator(self, value):
+        self.load_settings().set(GENERATOR_KEY, value)
+        self.save_settings()
+
+
+PREFERENCES = Preferences()
+
+SELECT_COMPILER_EVENT = threading.Event()
+
+
+class CmaketoolsSelectCompilerCommand(sublime_plugin.TextCommand):
+    """"""
+
+    def run(self, edit: sublime.Edit):
+        thread = threading.Thread(target=self._set_compiler)
+        thread.start()
+
+    @staticmethod
+    def _build_title(c: compiler_kit.Compiler) -> str:
+        return f"({c.name.upper()}) {c.cc}"
+
+    def _set_compiler(self):
+
+        try:
+            sublime.status_message("scanning installed compilers...")
+            scanner = compiler_kit.Scanner()
+            compilers = scanner.scan()
+
+        except Exception:
+            SELECT_COMPILER_EVENT.set()
+
+        def select_compiler(index=-1):
+            try:
+                if index < 0:
+                    return
+                PREFERENCES.set_compiler(compilers[index])
+            finally:
+                SELECT_COMPILER_EVENT.set()
+
+        if not compilers:
             return
 
-        if self.project_configured:
-            return
+        compiler_titles = [self._build_title(c) for c in compilers]
 
-        self.view.run_command("cmaketools_configure")
-        self.project_configured = True
+        self.view.window().show_quick_panel(
+            compiler_titles,
+            on_select=select_compiler,
+            flags=sublime.MONOSPACE_FONT,
+            placeholder="Select compiler...",
+        )
 
 
 class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
     """"""
 
-    def run(self, edit: sublime.Edit, build_type: str = ""):
-        workspace_path = get_workspace_path(self.view)
-        thread = threading.Thread(
-            target=cmake_build.configure,
-            kwargs={"source_dir": workspace_path, "build_type": build_type},
-        )
+    def run(self, edit: sublime.Edit):
+        thread = threading.Thread(target=self._configure)
         thread.start()
+
+    is_compiler_selected = False
+
+    def _select_compiler(self):
+        self.is_compiler_selected = True
+        self.view.run_command("cmaketools_select_compiler")
+
+    def _remove_cmakecache(self, workspace_path: Path):
+        # only remove "CMakeCache.txt" file in nearest workspace_path
+        for path in Path(workspace_path).glob("*/CMakeCache.txt"):
+            print(f"remove {path}")
+            os.remove(path)
+
+    def _configure(self):
+        workspace_path = get_workspace_path(self.view)
+        c_compiler = PREFERENCES.c_compiler
+        cxx_compiler = PREFERENCES.cxx_compiler
+        generator = PREFERENCES.generator
+
+        if not all([c_compiler, cxx_compiler, generator]):
+            if self.is_compiler_selected:
+                # exit function to prevent '_configure()' infinity call
+                return
+
+            self._select_compiler()
+
+            SELECT_COMPILER_EVENT.wait(30)
+            # cmake configuration not changed if "CMakeCache.txt" not removed
+            self._remove_cmakecache(workspace_path)
+            # reconfigure after compiler selected
+            self._configure()
+            return
+
+        try:
+            cmake_build.configure(
+                source_dir=workspace_path,
+                cc_path=c_compiler,
+                cxx_path=cxx_compiler,
+                generator=generator,
+            )
+        except Exception as err:
+            print(err)
 
     def is_visible(self):
         return valid_build(self.view)
