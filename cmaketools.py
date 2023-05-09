@@ -200,6 +200,28 @@ class Preferences:
 PREFERENCES = Preferences()
 
 SELECT_COMPILER_EVENT = threading.Event()
+call_lock = threading.Lock()
+
+
+def call_once(func):
+    """call function until complete and ignore other"""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if call_lock.locked():
+            return
+
+        with call_lock:
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
+def show_console_panel():
+    """show sublime console panel"""
+    sublime.active_window().run_command(
+        "show_panel", {"panel": "console", "toggle": True}
+    )
 
 
 class CmaketoolsSelectCompilerCommand(sublime_plugin.TextCommand):
@@ -247,7 +269,10 @@ class CmaketoolsSelectCompilerCommand(sublime_plugin.TextCommand):
 class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
     """"""
 
-    def run(self, edit: sublime.Edit):
+    def run(self, edit: sublime.Edit, show_console: bool = False):
+        if show_console:
+            show_console_panel()
+
         thread = threading.Thread(target=self._configure)
         thread.start()
 
@@ -263,11 +288,24 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
             print(f"remove {path}")
             os.remove(path)
 
+    @call_once
     def _configure(self):
+        # maybe the SELECT_COMPILER_EVENT has been set in previous call
+        SELECT_COMPILER_EVENT.clear()
+
         workspace_path = get_workspace_path(self.view)
         c_compiler = PREFERENCES.c_compiler
         cxx_compiler = PREFERENCES.cxx_compiler
         generator = PREFERENCES.generator
+
+        def reload_compiler():
+            nonlocal c_compiler
+            nonlocal cxx_compiler
+            nonlocal generator
+
+            c_compiler = PREFERENCES.c_compiler
+            cxx_compiler = PREFERENCES.cxx_compiler
+            generator = PREFERENCES.generator
 
         if not all([c_compiler, cxx_compiler, generator]):
             if self.is_compiler_selected:
@@ -280,18 +318,21 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
             # cmake configuration not changed if "CMakeCache.txt" not removed
             self._remove_cmakecache(workspace_path)
             # reconfigure after compiler selected
-            self._configure()
-            return
+            reload_compiler()
 
         try:
-            cmake_build.configure(
+            ret = cmake_build.configure(
                 source_dir=workspace_path,
                 cc_path=c_compiler,
                 cxx_path=cxx_compiler,
                 generator=generator,
             )
+
         except Exception as err:
             print(err)
+        else:
+            status = "success" if ret == 0 else "failed"
+            sublime.status_message(f"CMake configure {status}")
 
     def is_visible(self):
         return valid_build(self.view)
@@ -301,34 +342,27 @@ class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
     """"""
 
     def run(self, edit: sublime.Edit, build_type: str = ""):
-        if build_type:
-            self._build(build_type)
-        else:
-            self.select_build_type()
-
-    def select_build_type(self):
-        build_types = cmake_build.BUILD_TYPES
-
-        def build_with_type(index):
-            if index < 0:
-                return
-            self._build(build_types[index])
-
-        self.view.window().show_quick_panel(
-            build_types, selected_index=0, on_select=build_with_type
-        )
-
-    def _build(self, build_type):
         workspace_path = get_workspace_path(self.view)
+        build_path = str(Path(workspace_path).joinpath("build"))
 
         thread = threading.Thread(
-            target=cmake_build.build,
-            kwargs={
-                "build_dir": str(Path(workspace_path).joinpath("build")),
-                "build_type": build_type,
-            },
+            target=self._build,
+            args=(
+                build_path,
+                build_type,
+            ),
         )
         thread.start()
+
+    @call_once
+    def _build(self, build_path, build_type):
+        try:
+            ret = cmake_build.build(build_dir=build_path, build_type=build_type)
+        except Exception as err:
+            print(err)
+        else:
+            status = "success" if ret == 0 else "failed"
+            sublime.status_message(f"CMake build {status}")
 
     def is_visible(self):
         return valid_build(self.view)
@@ -340,10 +374,23 @@ class CmaketoolsCtestCommand(sublime_plugin.TextCommand):
     def run(self, edit: sublime.Edit, build_type: str = ""):
         workspace_path = get_workspace_path(self.view)
         thread = threading.Thread(
-            target=cmake_build.ctest,
-            kwargs={"source_dir": workspace_path, "build_type": build_type},
+            target=self._ctest,
+            args=(
+                workspace_path,
+                build_type,
+            ),
         )
         thread.start()
+
+    @call_once
+    def _ctest(self, workspace_path, build_type=""):
+        try:
+            ret = cmake_build.ctest(source_dir=workspace_path, build_type=build_type)
+        except Exception as err:
+            print(err)
+        else:
+            status = "success" if ret == 0 else "failed"
+            sublime.status_message(f"CTest {status}")
 
     def is_visible(self):
         return valid_build(self.view)

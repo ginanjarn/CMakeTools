@@ -69,6 +69,7 @@ def exec_cmd_nobuffer(command: List[str], **kwargs: Any) -> int:
 
 PathStr = str
 BuildTypeStr = str
+ReturnCode = int
 
 BUILD_TYPES = [
     "Debug",
@@ -78,7 +79,9 @@ BUILD_TYPES = [
 ]
 
 
-def configure(source_dir: PathStr, cc_path: PathStr, cxx_path: PathStr, generator: str):
+def configure(
+    source_dir: PathStr, cc_path: PathStr, cxx_path: PathStr, generator: str
+) -> ReturnCode:
     """configure project"""
 
     source_dir = Path(source_dir)
@@ -99,12 +102,13 @@ def configure(source_dir: PathStr, cc_path: PathStr, cxx_path: PathStr, generato
 
     ret = exec_cmd_nobuffer(command)
     print(f"execution terminated with exit code {ret}")
+    return ret
 
 
 def build(
     build_dir: PathStr,
     build_type: BuildTypeStr = "",
-):
+) -> ReturnCode:
     """build project
 
     execute 'cmake build'
@@ -126,12 +130,13 @@ def build(
 
     ret = exec_cmd_nobuffer(command)
     print(f"execution terminated with exit code {ret}")
+    return ret
 
 
 def ctest(
     source_dir: PathStr,
     build_type: BuildTypeStr = "",
-):
+) -> ReturnCode:
     """run test project
 
     execute 'ctest'
@@ -142,3 +147,4 @@ def ctest(
 
     ret = exec_cmd_nobuffer(command, cwd=source_dir)
     print(f"execution terminated with exit code {ret}")
+    return ret
