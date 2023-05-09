@@ -8,23 +8,31 @@
 		"command": "cmaketools_configure"
 	},
 	{
-		"caption": "CMake: Build...",
+		"caption": "CMake: Build",
 		"command": "cmaketools_build"
 	},
 	{
 		"args":
 		{
-			"build_type": "Debug"
-		},
-		"caption": "CMake: Build (Debug)",
-		"command": "cmaketools_build"
-	},
-	{
-		"args":
-		{
-			"build_type": "Debug"
+			"build_type": "Release"
 		},
 		"caption": "CMake: Build (Release)",
+		"command": "cmaketools_build"
+	},
+	{
+		"args":
+		{
+			"build_type": "RelWithDebInfo"
+		},
+		"caption": "CMake: Build (RelWithDebInfo)",
+		"command": "cmaketools_build"
+	},
+	{
+		"args":
+		{
+			"build_type": "MinSizeRel"
+		},
+		"caption": "CMake: Build (MinSizeRel)",
 		"command": "cmaketools_build"
 	},
 	{
