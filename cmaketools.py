@@ -2,6 +2,7 @@
 
 import os
 import threading
+import time
 from pathlib import Path
 from functools import wraps
 from typing import List
@@ -135,17 +136,25 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
             },
         )
 
-    # project_configured = False
+    configure_event = threading.Event()
 
-    # def on_activated(self):
-    #     if not valid_context(self.view, 0):
-    #         return
+    def _configure_project(self):
+        self.configure_event.set()
+        self.view.run_command("cmaketools_configure")
 
-    #     if self.project_configured:
-    #         return
+    def on_activated_async(self):
+        if not valid_context(self.view, 0):
+            return
 
-    #     self.view.run_command("cmaketools_configure")
-    #     self.project_configured = True
+        if not self.configure_event.is_set():
+            time.sleep(3.0)
+            self._configure_project()
+
+    def on_post_save_async(self):
+        if not valid_context(self.view, 0):
+            return
+
+        self._configure_project()
 
 
 CC_KEY = "c"
