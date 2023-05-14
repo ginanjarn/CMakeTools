@@ -233,6 +233,21 @@ def show_console_panel():
     )
 
 
+def message_busy(func):
+    """show 'BUSY' in status message"""
+
+    def wrapper(*args, **kwargs):
+        key = "cmaketools"
+        view = sublime.active_window().active_view()
+        try:
+            view.set_status(key, "BUSY")
+            return func(*args, **kwargs)
+        finally:
+            view.erase_status(key)
+
+    return wrapper
+
+
 class CmaketoolsSelectCompilerCommand(sublime_plugin.TextCommand):
     """"""
 
@@ -244,6 +259,7 @@ class CmaketoolsSelectCompilerCommand(sublime_plugin.TextCommand):
     def _build_title(c: compiler_kit.Compiler) -> str:
         return f"({c.name.upper()}) {c.cc}"
 
+    @message_busy
     def _set_compiler(self):
 
         try:
@@ -298,6 +314,7 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
             os.remove(path)
 
     @call_once
+    @message_busy
     def _configure(self):
         # maybe the SELECT_COMPILER_EVENT has been set in previous call
         SELECT_COMPILER_EVENT.clear()
@@ -364,6 +381,7 @@ class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
         thread.start()
 
     @call_once
+    @message_busy
     def _build(self, build_path, build_type):
         try:
             ret = cmake_build.build(build_dir=build_path, build_type=build_type)
@@ -392,6 +410,7 @@ class CmaketoolsCtestCommand(sublime_plugin.TextCommand):
         thread.start()
 
     @call_once
+    @message_busy
     def _ctest(self, workspace_path, build_type=""):
         try:
             ret = cmake_build.ctest(source_dir=workspace_path, build_type=build_type)
