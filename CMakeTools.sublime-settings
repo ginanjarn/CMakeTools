@@ -1,0 +1,8 @@
+{
+	// Compiler Path
+	"c": "",
+	"cxx": "",
+	// Build generator
+	// e.g: Ninja, MinGW Makefiles, NMake Makefiles, Unix Makefiles, etc...
+	"generator": "",
+}
