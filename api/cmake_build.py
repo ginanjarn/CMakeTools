@@ -134,7 +134,7 @@ def build(
 
 
 def ctest(
-    source_dir: PathStr,
+    build_dir: PathStr,
     build_type: BuildTypeStr = "",
 ) -> ReturnCode:
     """run test project
@@ -145,6 +145,6 @@ def ctest(
     build_type = build_type or "Debug"
     command = ["ctest", "-j4", "-C", build_type, "-T", "test", "--output-on-failure"]
 
-    ret = exec_cmd_nobuffer(command, cwd=source_dir)
+    ret = exec_cmd_nobuffer(command, cwd=build_dir)
     print(f"execution terminated with exit code {ret}")
     return ret

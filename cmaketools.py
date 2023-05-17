@@ -364,6 +364,10 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
         return valid_build(self.view)
 
 
+# BUILD_EVENT wait project to be built before running CTest
+BUILD_EVENT = threading.Event()
+
+
 class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
     """"""
 
@@ -391,6 +395,9 @@ class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
             status = "success" if ret == 0 else "failed"
             sublime.status_message(f"CMake build {status}")
 
+        finally:
+            BUILD_EVENT.set()
+
     def is_visible(self):
         return valid_build(self.view)
 
@@ -409,16 +416,27 @@ class CmaketoolsCtestCommand(sublime_plugin.TextCommand):
         )
         thread.start()
 
-    @call_once
     @message_busy
     def _ctest(self, workspace_path, build_type=""):
+
+        # build project before run CTest
+        BUILD_EVENT.clear()
+        self.view.run_command("cmaketools_build")
+        BUILD_EVENT.wait()
+
+        build_path = str(Path(workspace_path).joinpath("build"))
         try:
-            ret = cmake_build.ctest(source_dir=workspace_path, build_type=build_type)
+            ret = cmake_build.ctest(build_dir=build_path, build_type=build_type)
         except Exception as err:
             print(err)
         else:
             status = "success" if ret == 0 else "failed"
             sublime.status_message(f"CTest {status}")
+
+            if ret != 0:
+                sublime.active_window().run_command(
+                    "show_panel", {"panel": "console", "toggle": False}
+                )
 
     def is_visible(self):
         return valid_build(self.view)
