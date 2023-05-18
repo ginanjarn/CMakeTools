@@ -248,6 +248,42 @@ def message_busy(func):
     return wrapper
 
 
+class OutputPanel:
+    """"""
+
+    OUTPUT_PANEL_NAME = "cmaketools"
+
+    @property
+    def window(self):
+        return sublime.active_window()
+
+    def append_message(self, message: str) -> None:
+        """append message"""
+
+        panel = self.window.find_output_panel(self.OUTPUT_PANEL_NAME)
+        if not panel:
+            panel = self.window.create_output_panel(self.OUTPUT_PANEL_NAME)
+
+        panel.set_read_only(False)
+        panel.run_command(
+            "append",
+            {"characters": f"{message}\n"},
+        )
+        self.show()
+
+    def show(self) -> None:
+        """show panel"""
+        self.window.run_command(
+            "show_panel", {"panel": f"output.{self.OUTPUT_PANEL_NAME}"}
+        )
+
+    def __del__(self):
+        self.window.destroy_output_panel(self.OUTPUT_PANEL_NAME)
+
+
+OUTPUT_PANEL = OutputPanel()
+
+
 class CmaketoolsSelectCompilerCommand(sublime_plugin.TextCommand):
     """"""
 
@@ -357,8 +393,7 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
         except Exception as err:
             print(err)
         else:
-            status = "success" if ret == 0 else "failed"
-            sublime.status_message(f"CMake configure {status}")
+            OUTPUT_PANEL.append_message(ret.text())
 
     def is_visible(self):
         return valid_build(self.view)
@@ -392,8 +427,7 @@ class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
         except Exception as err:
             print(err)
         else:
-            status = "success" if ret == 0 else "failed"
-            sublime.status_message(f"CMake build {status}")
+            OUTPUT_PANEL.append_message(ret.text())
 
         finally:
             BUILD_EVENT.set()
@@ -430,13 +464,7 @@ class CmaketoolsCtestCommand(sublime_plugin.TextCommand):
         except Exception as err:
             print(err)
         else:
-            status = "success" if ret == 0 else "failed"
-            sublime.status_message(f"CTest {status}")
-
-            if ret != 0:
-                sublime.active_window().run_command(
-                    "show_panel", {"panel": "console", "toggle": False}
-                )
+            OUTPUT_PANEL.append_message(ret.text())
 
     def is_visible(self):
         return valid_build(self.view)

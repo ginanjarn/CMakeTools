@@ -2,11 +2,20 @@
 
 import os
 import subprocess
-import threading
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Any
+
+PathStr = str
+BuildTypeStr = str
+ReturnCode = int
+
+BUILD_TYPES = [
+    "Debug",
+    "Release",
+    "RelWithDebInfo",
+    "MinSizeRel",
+]
 
 if os.name == "nt":
     # if on Windows, hide process window
@@ -18,16 +27,22 @@ else:
 
 @dataclass
 class ExecResult:
-    returncode: int
+    returncode: ReturnCode
     stdout: str
     stderr: str
 
+    def text(self) -> str:
+        """text of concatenated stdout and stderr"""
+        temp = []
+        if self.stdout:
+            temp.append(self.stdout)
+        if self.stderr:
+            temp.append(self.stderr)
+        return "\n".join(temp)
 
-def exec_cmd_nobuffer(command: List[str], **kwargs: Any) -> int:
-    """exec command and write result to stderr
 
-    return exit code
-    """
+def exec_cmd(command: List[str], **kwargs: Any) -> ExecResult:
+    """exec command"""
 
     print(f"execute {command}")
 
@@ -41,47 +56,17 @@ def exec_cmd_nobuffer(command: List[str], **kwargs: Any) -> int:
         cwd=kwargs.get("cwd"),
     )
 
-    def listen_stderr():
-        while True:
-            if line := process.stderr.readline():
-                print(line.strip().decode())
-            else:
-                return
-
-    def listen_stdout():
-        while True:
-            if line := process.stdout.readline():
-                print(line.strip().decode())
-            else:
-                return
-
-    sout_thread = threading.Thread(target=listen_stdout, daemon=True)
-    serr_thread = threading.Thread(target=listen_stderr, daemon=True)
-    sout_thread.start()
-    serr_thread.start()
-
-    # wait until process done
-    while process.poll() is None:
-        time.sleep(0.5)
-
-    return process.poll()
-
-
-PathStr = str
-BuildTypeStr = str
-ReturnCode = int
-
-BUILD_TYPES = [
-    "Debug",
-    "Release",
-    "RelWithDebInfo",
-    "MinSizeRel",
-]
+    sout, serr = process.communicate()
+    return ExecResult(
+        process.returncode,
+        sout.replace(b"\r", b"").decode(),
+        serr.replace(b"\r", b"").decode(),
+    )
 
 
 def configure(
     source_dir: PathStr, cc_path: PathStr, cxx_path: PathStr, generator: str
-) -> ReturnCode:
+) -> ExecResult:
     """configure project"""
 
     source_dir = Path(source_dir)
@@ -100,19 +85,14 @@ def configure(
         generator,
     ]
 
-    ret = exec_cmd_nobuffer(command)
-    print(f"execution terminated with exit code {ret}")
-    return ret
+    return exec_cmd(command)
 
 
 def build(
     build_dir: PathStr,
     build_type: BuildTypeStr = "",
-) -> ReturnCode:
-    """build project
-
-    execute 'cmake build'
-    """
+) -> ExecResult:
+    """build project"""
 
     build_type = build_type or "Debug"
     command = [
@@ -123,28 +103,20 @@ def build(
         build_type,
         "--target",
         "all",
-        "-j",
-        "4",
+        "-j4",
         "--",
     ]
 
-    ret = exec_cmd_nobuffer(command)
-    print(f"execution terminated with exit code {ret}")
-    return ret
+    return exec_cmd(command)
 
 
 def ctest(
     build_dir: PathStr,
     build_type: BuildTypeStr = "",
-) -> ReturnCode:
-    """run test project
-
-    execute 'ctest'
-    """
+) -> ExecResult:
+    """test project"""
 
     build_type = build_type or "Debug"
     command = ["ctest", "-j4", "-C", build_type, "-T", "test", "--output-on-failure"]
 
-    ret = exec_cmd_nobuffer(command, cwd=build_dir)
-    print(f"execution terminated with exit code {ret}")
-    return ret
+    return exec_cmd(command, cwd=build_dir)
