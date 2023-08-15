@@ -7,7 +7,7 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass
-from typing import List, Iterator
+from typing import Iterator
 
 from .triple import (
     TargetTriple,
@@ -20,8 +20,8 @@ GeneratorStr = str
 
 
 @dataclass
-class Compiler:
-    """Compiler data
+class CompilerKit:
+    """CompilerKit data
 
     cc: c compiler path
     cxx: cxx compiler path
@@ -61,7 +61,7 @@ def get_subprocess_result(command: str) -> str:
 
 
 class Scanner:
-    """Compiler scanner"""
+    """CompilerKit scanner"""
 
     scan_compilers = [
         {"cc_name": "gcc", "cxx_name": "g++", "version_switch": "-v"},
@@ -90,7 +90,6 @@ class Scanner:
         return compiler_path
 
     def _get_generator(self, triple: TargetTriple) -> GeneratorStr:
-
         if triple.target_os == "msys":
             return "MSYS Makefiles"
 
@@ -99,7 +98,7 @@ class Scanner:
 
         return "NMake Makefiles" if os.name == "nt" else "Unix Makefiles"
 
-    def _scan(self) -> Iterator[Compiler]:
+    def _scan(self) -> Iterator[CompilerKit]:
         def get_compiler(target):
             cc_name = target["cc_name"]
             cxx_name = target["cxx_name"]
@@ -111,11 +110,11 @@ class Scanner:
                 cc_path = self._get_cc_path(compiler_path, triple)
                 cxx_path = cc_path.replace(cc_name, cxx_name)
                 generator = self._get_generator(triple)
-                return Compiler(cc_name, cc_path, cxx_path, generator)
+                return CompilerKit(cc_name, cc_path, cxx_path, generator)
 
         for target in self.scan_compilers:
             if compiler := get_compiler(target):
                 yield compiler
 
-    def scan(self) -> List[Compiler]:
-        return list(self._scan())
+    def scan(self) -> Iterator[CompilerKit]:
+        yield from self._scan()

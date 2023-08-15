@@ -14,7 +14,7 @@
 	{
 		"args":
 		{
-			"build_type": "Release"
+			"build_config": "Release"
 		},
 		"caption": "CMake: Build (Release)",
 		"command": "cmaketools_build"
@@ -22,7 +22,7 @@
 	{
 		"args":
 		{
-			"build_type": "RelWithDebInfo"
+			"build_config": "RelWithDebInfo"
 		},
 		"caption": "CMake: Build (RelWithDebInfo)",
 		"command": "cmaketools_build"
@@ -30,13 +30,17 @@
 	{
 		"args":
 		{
-			"build_type": "MinSizeRel"
+			"build_config": "MinSizeRel"
 		},
 		"caption": "CMake: Build (MinSizeRel)",
 		"command": "cmaketools_build"
 	},
 	{
-		"caption": "CMake: CTest",
-		"command": "cmaketools_ctest"
+		"caption": "CMake: Test",
+		"command": "cmaketools_test"
+	},
+	{
+		"caption": "CMake: Set Compiler Kits...",
+		"command": "cmaketools_set_kits"
 	}
 ]

@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-executable_cmake_template = """cmake_minimum_required(VERSION 3.0.0)
+executable_cmake_template = """\
+cmake_minimum_required(VERSION 3.20.0)
 project(%(project_name)s VERSION 0.1.0)
 
 include(CTest)
@@ -15,7 +16,8 @@ set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 include(CPack)
 """
 
-executable_cpp_template = """#include <iostream>
+executable_cpp_template = """\
+#include <iostream>
 
 int main(int argc, char const *argv[])
 {
@@ -24,7 +26,8 @@ int main(int argc, char const *argv[])
 }
 """
 
-library_cmake_template = """cmake_minimum_required(VERSION 3.0.0)
+library_cmake_template = """\
+cmake_minimum_required(VERSION 3.20.0)
 project(%(project_name)s VERSION 0.1.0)
 
 include(CTest)
@@ -37,7 +40,8 @@ set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 include(CPack)
 """
 
-library_cpp_template = """#include <iostream>
+library_cpp_template = """\
+#include <iostream>
 
 void say_hello(){
     std::cout << "Hello, from %(project_name)s!";
