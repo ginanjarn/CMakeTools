@@ -1,9 +1,10 @@
 """cmake tools"""
 
+import json
 import threading
-from functools import wraps
+from dataclasses import asdict
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Dict
 
 import sublime
 import sublime_plugin
@@ -14,16 +15,6 @@ from . import api
 
 def valid_context(view: sublime.View, point: int) -> bool:
     return view.match_selector(point, "source.cmake")
-
-
-def valid_build(view: sublime.View, point: int = 0):
-    return any(
-        [
-            view.match_selector(point, "source.cmake"),
-            view.match_selector(point, "source.c++"),
-            view.match_selector(point, "source.c"),
-        ]
-    )
 
 
 def get_workspace_path(view: sublime.View) -> str:
@@ -37,41 +28,98 @@ def get_workspace_path(view: sublime.View) -> str:
     return str(Path(file_name).parent)
 
 
+class HelpItemManager:
+    def __init__(self):
+        self.cached_helps: Dict[str, api.CMakeHelpItem] = {}
+        self.cached_completions: List[sublime.CompletionItem] = []
+
+        self._cache_loaded = False
+        self._build_lock = threading.Lock()
+
+    cache_path = Path(__file__).parent.joinpath("var", "cmake_helps.json")
+    type_map = {
+        "command": sublime.KIND_FUNCTION,
+        "variable": sublime.KIND_VARIABLE,
+        "property": sublime.KIND_VARIABLE,
+        "module": sublime.KIND_NAMESPACE,
+    }
+
+    def load_cache(self):
+        # call load_cache once only
+        self._cache_loaded = True
+
+        if self.cache_path.is_file():
+            jstr = self.cache_path.read_text()
+            data = json.loads(jstr)
+
+            for item in data:
+                self.cached_helps[item["name"]] = api.CMakeHelpItem(
+                    item["type"], item["name"]
+                )
+
+                snippet = item["name"].replace("<", "${1:").replace(">", "}") + "$0"
+
+                self.cached_completions.append(
+                    sublime.CompletionItem.snippet_completion(
+                        trigger=item["name"],
+                        snippet=snippet,
+                        kind=self.type_map[item["type"]],
+                    )
+                )
+        else:
+            # only one thread can continue
+            if self._build_lock.locked():
+                return
+
+            with self._build_lock:
+                self.build_cache()
+                # reload after build
+                self.load_cache()
+
+    def build_cache(self):
+        cache_dir = self.cache_path.parent
+        if not cache_dir.is_dir():
+            cache_dir.mkdir(parents=True)
+
+        items = api.get_helps()
+        data = [asdict(item) for item in items]
+        jstr = json.dumps(data, indent=2)
+        self.cache_path.write_text(jstr)
+
+    def get_help(self, name: str) -> Optional[api.CMakeHelpItem]:
+        if not self._cache_loaded:
+            self.load_cache()
+
+        if item := self.cached_helps.get(name):
+            return api.get_docstring(item)
+
+    def get_completions(self):
+        if not self._cache_loaded:
+            self.load_cache()
+
+        return self.cached_completions()
+
+
 class ViewEventListener(sublime_plugin.ViewEventListener):
     """"""
 
-    call_lock = threading.Lock()
-
-    def call_once(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if ViewEventListener.call_lock.locked():
-                return
-
-            with ViewEventListener.call_lock:
-                return func(*args, **kwargs)
-
-        return wrapper
+    def __init__(self, view: sublime.View):
+        super().__init__(view)
+        self.help_manager = HelpItemManager()
 
     def on_hover(self, point: int, hover_zone: HoverZone):
         # check point in valid source
         if not (valid_context(self.view, point) and hover_zone == sublime.HOVER_TEXT):
             return
 
-        source = self.view.substr(sublime.Region(0, self.view.size()))
-        row, col = self.view.rowcol(point)
-        thread = threading.Thread(target=self._request_help, args=(source, row, col))
+        thread = threading.Thread(target=self._request_help, args=(point,))
         thread.start()
 
-    @call_once
-    def _request_help(self, source: str, row: int, col: int):
-        script = api.Script(source)
-        if docstring := script.help(row, col):
-            point = self.view.text_point(row, col)
-            self.view.run_command("markdown_popup", {"text": docstring, "point": point})
+    def _request_help(self, point):
+        name = self.view.substr(self.view.word(point))
 
-    _previous_cursor_pos = -1
-    _cached_completion = None
+        if docstring := self.help_manager.get_help(name):
+            self.view.run_command("markdown_popup", {"text": docstring, "point": point})
 
     def on_query_completions(
         self, prefix: str, locations: List[int]
@@ -82,52 +130,8 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
         if not valid_context(self.view, point):
             return
 
-        if self._cached_completion:
-            if point == self._previous_cursor_pos:
-                return sublime.CompletionList(self._cached_completion)
+        if items := self.help_manager.cached_completions:
+            return sublime.CompletionList(items)
 
-        self._previous_cursor_pos = point
-        source = self.view.substr(sublime.Region(0, self.view.size()))
-        row, col = self.view.rowcol(point)
-
-        thread = threading.Thread(
-            target=self._query_completion, args=(source, row, col)
-        )
+        thread = threading.Thread(target=self.help_manager.load_cache)
         thread.start()
-
-    @call_once
-    def _query_completion(self, source: str, row: int, col: int):
-        script = api.Script(source)
-        completions = script.complete(row, col)
-
-        def convert_kind(kind: api.NameType):
-            kind_map = {
-                api.NameType.Command: sublime.KIND_FUNCTION,
-                api.NameType.Module: sublime.KIND_NAMESPACE,
-                api.NameType.Property: sublime.KIND_VARIABLE,
-                api.NameType.Variable: sublime.KIND_VARIABLE,
-            }
-            return kind_map[kind]
-
-        def build_completion(name: api.Name) -> sublime.CompletionItem:
-            text = name.name
-            kind = convert_kind(name.type)
-            snippet = text
-
-            if "<" in text:
-                snippet = text.replace("<", "${1:").replace(">", "}")
-
-            return sublime.CompletionItem.snippet_completion(
-                trigger=text, snippet=snippet, kind=kind
-            )
-
-        self._cached_completion = [build_completion(c) for c in completions]
-
-        self.view.run_command(
-            "auto_complete",
-            {
-                "disable_auto_insert": True,
-                "next_completion_if_showing": True,
-                "auto_complete_commit_on_tab": True,
-            },
-        )

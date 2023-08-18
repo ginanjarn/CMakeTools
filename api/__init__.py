@@ -2,12 +2,9 @@
 
 import html
 import os
-import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from functools import lru_cache
-from enum import Enum
 from typing import List, Iterator
 
 
@@ -19,7 +16,7 @@ else:
     STARTUPINFO = None
 
 
-def exec_cmd(command: List[str]) -> str:
+def get_childprocess(command: List[str]) -> str:
     process = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -28,119 +25,49 @@ def exec_cmd(command: List[str]) -> str:
         startupinfo=STARTUPINFO,
     )
     sout, serr = process.communicate()
-    if (ret := process.poll()) and ret != 0:
+    if ret := process.returncode:
         print(serr.strip().decode(), file=sys.stderr)
         raise OSError(f"process terminated with exit code {ret}")
     return sout.strip().decode()
 
 
-NameStr = str
-DocumentStr = str
-TypeStr = str
-
-
-class NameType(Enum):
-    Command = "command"
-    Module = "module"
-    Property = "property"
-    Variable = "variable"
-
-
-@lru_cache(maxsize=512)
-def get_cmake_names(type: NameType) -> List[NameStr]:
-    try:
-        command = ["cmake", f"--help-{type.value}-list"]
-    except AttributeError as err:
-        raise TypeError(f"type must {NameType!r}") from err
-
-    return exec_cmd(command).splitlines()
-
-
-@lru_cache(maxsize=512)
-def get_cmake_documentation(type: NameType, name: NameStr) -> DocumentStr:
-    try:
-        command = ["cmake", f"--help-{type.value}", name]
-    except AttributeError as err:
-        raise TypeError(f"type must {NameType!r}") from err
-
-    return exec_cmd(command)
+HelpType = str
 
 
 @dataclass
-class Name:
-    name: NameStr
-    type: NameType
-    docstring: DocumentStr = ""
+class CMakeHelpItem:
+    type: HelpType
+    name: str
 
-
-class Proxy:
-    """Proxy helper for fetching cmake help commands"""
-
-    def _get_all_names(self) -> Iterator[Name]:
-
-        commands = get_cmake_names(NameType.Command)
-        for command in commands:
-            yield Name(command, NameType.Command)
-
-        modules = get_cmake_names(NameType.Module)
-        for module in modules:
-            yield Name(module, NameType.Module)
-
-        properties = get_cmake_names(NameType.Property)
-        for property in properties:
-            yield Name(property, NameType.Property)
-
-        variables = get_cmake_names(NameType.Variable)
-        for variable in variables:
-            yield Name(variable, NameType.Variable)
-
-    def get_all_names(self) -> List[Name]:
-        return list(self._get_all_names())
-
-    def get_documentation(self, name: NameStr) -> DocumentStr:
-        cnames = self.get_all_names()
-        found_index = -1
-        for index, cname in enumerate(cnames):
-            if cname.name == name:
-                found_index = index
-                break
-        if found_index < 0:
-            raise ValueError(f"name not found: {name!r}")
-
-        doc = get_cmake_documentation(cnames[found_index].type, name)
+    def get_docstring(self) -> str:
+        """return .rst formatted docstring"""
+        command = ["cmake", f"--help-{self.type}", self.name]
+        doc = get_childprocess(command)
         return doc
 
 
-class Script:
-    def __init__(self, source: str):
-        self.source = source
-        self._proxy = Proxy()
+def _get_helps(type: HelpType = "") -> Iterator[CMakeHelpItem]:
+    command = ["cmake", f"--help-{type}-list"]
+    result = get_childprocess(command)
+    yield from (CMakeHelpItem(type, item) for item in result.splitlines())
 
-    def _get_word_at(self, row: int, col: int) -> str:
-        lines = self.source.split("\n")
-        occur_line = lines[row]
 
-        if (lines_len := len(lines)) and row >= lines_len:
-            raise ValueError(f"params row ({row}) not in valid range (0-{lines_len})")
+HELP_TYPES = ["command", "variable", "property", "module"]
 
-        if (line_len := len(occur_line)) and col > line_len:
-            raise ValueError(f"params column ({col}) not in valid range (0-{line_len})")
 
-        for found in re.finditer(r"(\w+)", occur_line):
-            if found.start() <= col <= found.end():
-                return found.group(1)
+def get_helps(type: HelpType = "") -> Iterator[CMakeHelpItem]:
+    """get available helps"""
 
-        raise ValueError(f"no identifier found at row: {row}, column:{col}")
+    if type in HELP_TYPES:
+        yield from _get_helps(type)
+        return
 
-    def help(self, row: int, col: int) -> Name:
-        try:
-            name = self._get_word_at(row, col)
-            doc = self._proxy.get_documentation(name)
+    for type in HELP_TYPES:
+        yield from _get_helps(type)
 
-        except ValueError:
-            return ""
-        else:
-            return f"<pre>{html.escape(doc)}</pre>"
 
-    def complete(self, row: int, col: int) -> Name:
-        return self._proxy.get_all_names()
+def get_docstring(help: CMakeHelpItem) -> str:
+    """get docstring markdown compatible"""
+
+    # due to incompatibility between '.rst' with markdown, wrap docstring with pre
+    return "<pre>" + html.escape(help.get_docstring()) + "</pre>"
