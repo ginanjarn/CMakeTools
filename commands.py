@@ -103,6 +103,9 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
         show_empty_panel(OUTPUT_PANEL)
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL)
 
+    def is_enabled(self):
+        return valid_source(self.window.active_view())
+
 
 class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
     """"""
@@ -130,6 +133,9 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
         self.build_event.set()
 
+    def is_enabled(self):
+        return valid_source(self.window.active_view())
+
 
 class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
     """"""
@@ -156,6 +162,9 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
         params = cmake.CTest(build_path, config)
         OUTPUT_PANEL.show()
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL, cwd=build_path)
+
+    def is_enabled(self):
+        return valid_source(self.window.active_view())
 
 
 class KitManager:
@@ -242,9 +251,9 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
 def valid_source(view: sublime.View):
     return any(
         [
-            view.match_selector("source.cmake"),
-            view.match_selector("source.c++"),
-            view.match_selector("source.c"),
+            view.match_selector(0, "source.cmake"),
+            view.match_selector(0, "source.c++"),
+            view.match_selector(0, "source.c"),
         ]
     )
 
