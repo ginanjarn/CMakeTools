@@ -57,7 +57,10 @@ class HelpItemManager:
                     item["type"], item["name"]
                 )
 
-                snippet = item["name"].replace("<", "${1:").replace(">", "}") + "$0"
+                if item["type"] == "command":
+                    snippet = item["name"] + "($0)"
+                else:
+                    snippet = item["name"].replace("<", "${1:").replace(">", "}") + "$0"
 
                 self.cached_completions.append(
                     sublime.CompletionItem.snippet_completion(
