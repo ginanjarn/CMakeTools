@@ -1,0 +1,30 @@
+<snippet>
+	<content><![CDATA[
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+find_package(${2:Qt6} REQUIRED COMPONENTS
+	${3:Core
+	Gui
+	Widgets}
+)
+
+qt_add_executable(${1:helloworld}
+	$0main.cpp
+)
+set_target_properties(calculatorform PROPERTIES
+	WIN32_EXECUTABLE TRUE
+	MACOSX_BUNDLE TRUE
+)
+target_link_libraries(${1:helloworld} PUBLIC
+	${4:${2:Qt6}::Core
+	${2:Qt6}::Gui
+	${2:Qt6}::Widgets}
+)
+]]></content>
+	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
+	<tabTrigger>qt_bootstrap</tabTrigger>
+	<!-- Optional: Set a scope to limit where the snippet will trigger -->
+	<scope>source.cmake</scope>
+</snippet>
