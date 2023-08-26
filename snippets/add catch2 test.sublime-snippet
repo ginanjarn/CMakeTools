@@ -1,0 +1,10 @@
+<snippet>
+	<content><![CDATA[
+add_executable(${1:tests} ${2:test.cpp})
+target_link_libraries(${1:tests} PRIVATE Catch2::Catch2WithMain)
+]]></content>
+	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
+	<tabTrigger>catch2_add_test</tabTrigger>
+	<!-- Optional: Set a scope to limit where the snippet will trigger -->
+	<scope>source.cmake</scope>
+</snippet>

@@ -1,0 +1,13 @@
+<snippet>
+	<content><![CDATA[
+# set(CMAKE_PREFIX_PATH ${1:<catch2_directory>})
+find_package(Catch2 3 REQUIRED)
+
+add_executable(${2:tests} ${3:test.cpp})
+target_link_libraries(${2:tests} PRIVATE Catch2::Catch2WithMain)
+]]></content>
+	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
+	<tabTrigger>catch2_bootstrap</tabTrigger>
+	<!-- Optional: Set a scope to limit where the snippet will trigger -->
+	<scope>source.cmake</scope>
+</snippet>
