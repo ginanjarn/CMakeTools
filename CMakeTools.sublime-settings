@@ -5,4 +5,6 @@
 	// Build generator
 	// e.g: Ninja, MinGW Makefiles, NMake Makefiles, Unix Makefiles, etc...
 	"generator": "",
+	// Configure project on save
+	"configure_on_save": true
 }

@@ -104,7 +104,7 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL)
 
     def is_enabled(self):
-        return valid_source(self.window.active_view())
+        return valid_build_source(self.window.active_view())
 
 
 class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
@@ -134,7 +134,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         self.build_event.set()
 
     def is_enabled(self):
-        return valid_source(self.window.active_view())
+        return valid_build_source(self.window.active_view())
 
 
 class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
@@ -164,7 +164,7 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL, cwd=build_path)
 
     def is_enabled(self):
-        return valid_source(self.window.active_view())
+        return valid_build_source(self.window.active_view())
 
 
 class KitManager:
@@ -248,7 +248,7 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
             pass
 
 
-def valid_source(view: sublime.View):
+def valid_build_source(view: sublime.View):
     return any(
         [
             view.match_selector(0, "source.cmake"),
@@ -258,11 +258,15 @@ def valid_source(view: sublime.View):
     )
 
 
+def valid_source(view: sublime.View):
+    return view.match_selector(0, "source.cmake")
+
+
 class CmaketoolsKitScanEvent(sublime_plugin.ViewEventListener):
     """"""
 
     def on_activate_async(self):
-        if not valid_source(self.view):
+        if not valid_build_source(self.view):
             return
 
         # set kit if not configured
@@ -273,6 +277,15 @@ class CmaketoolsKitScanEvent(sublime_plugin.ViewEventListener):
                 return
 
         self.view.window().run_command("cmaketools_set_kits", {"scan": True})
+
+    def on_post_save_async(self):
+        if not valid_source(self.view):
+            return
+
+        # set kit if not configured
+        with sublime_settings.Settings() as settings:
+            if settings.get("configure_on_save", False):
+                self.view.window().run_command("cmaketools_configure")
 
 
 class CmaketoolsQuickstartCommand(sublime_plugin.WindowCommand):
