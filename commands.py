@@ -123,6 +123,8 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         thread.start()
 
     def build(self, build_path: Path, build_config: str = ""):
+        self.save_all_buffer(self.window)
+
         with sublime_settings.Settings() as settings:
             config = build_config or settings.get("build_config", "Debug")
             target = settings.get("build_target", "all")
@@ -132,6 +134,17 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL)
 
         self.build_event.set()
+
+    def save_all_buffer(self, window: sublime.Window):
+        unsaved_views = [view for view in window.views() if view.is_dirty()]
+        if not unsaved_views:
+            return
+
+        message = f"{len(unsaved_views)} unsaved document(s).\n\nSave all?"
+        save_all = sublime.ok_cancel_dialog(message, title="Build Warning !")
+        if save_all:
+            for view in unsaved_views:
+                view.run_command("save", {"async": False})
 
     def is_enabled(self):
         return valid_build_source(self.window.active_view())
