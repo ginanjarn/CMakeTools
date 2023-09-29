@@ -4,7 +4,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(${2:Qt6} REQUIRED COMPONENTS
+find_package(Qt${2:6} REQUIRED COMPONENTS
 	${3:Core
 	Gui
 	Widgets}
@@ -13,14 +13,14 @@ find_package(${2:Qt6} REQUIRED COMPONENTS
 qt_add_executable(${1:helloworld}
 	$0main.cpp
 )
-set_target_properties(calculatorform PROPERTIES
+set_target_properties(${1:helloworld} PROPERTIES
 	WIN32_EXECUTABLE TRUE
 	MACOSX_BUNDLE TRUE
 )
 target_link_libraries(${1:helloworld} PUBLIC
-	${4:${2:Qt6}::Core
-	${2:Qt6}::Gui
-	${2:Qt6}::Widgets}
+	${4:Qt::Core
+	Qt::Gui
+	Qt::Widgets}
 )
 ]]></content>
 	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
