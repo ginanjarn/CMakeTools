@@ -36,6 +36,14 @@
 		"command": "cmaketools_build"
 	},
 	{
+		"args":
+		{
+			"panel": "output.cmaketools"
+		},
+		"caption": "CMake: Show Build Results",
+		"command": "show_panel"
+	},
+	{
 		"caption": "CMake: Test",
 		"command": "cmaketools_test"
 	},
