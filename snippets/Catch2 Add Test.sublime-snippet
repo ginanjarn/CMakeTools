@@ -1,7 +1,8 @@
 <snippet>
 	<content><![CDATA[
-add_executable(${1:tests} ${2:test.cpp})
-target_link_libraries(${1:tests} PRIVATE Catch2::Catch2WithMain)
+add_executable(${1:test} ${2:test.cpp})
+target_link_libraries(${1:test} PRIVATE Catch2::Catch2WithMain)
+add_test(NAME ${3:${1:test}} COMMAND ${1:test})
 ]]></content>
 	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
 	<tabTrigger>catch2_add_test</tabTrigger>

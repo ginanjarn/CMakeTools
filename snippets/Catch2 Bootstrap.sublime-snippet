@@ -1,10 +1,17 @@
 <snippet>
 	<content><![CDATA[
-# set(CMAKE_PREFIX_PATH ${1:<catch2_directory>})
-find_package(Catch2 3 REQUIRED)
+include(CTest)
+enable_testing()
 
-add_executable(${2:tests} ${3:test.cpp})
-target_link_libraries(${2:tests} PRIVATE Catch2::Catch2WithMain)
+// add Catch2 in 'lib' directory
+add_subdirectory(lib/Catch2)
+
+// include_directories to make '${0:src}' directory visible
+include_directories(${0:src})
+
+add_executable(${1:test} ${2:test.cpp})
+target_link_libraries(${1:test} PRIVATE Catch2::Catch2WithMain)
+add_test(NAME ${3:${1:test}} COMMAND ${1:test})
 ]]></content>
 	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
 	<tabTrigger>catch2_bootstrap</tabTrigger>
