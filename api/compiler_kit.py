@@ -23,14 +23,14 @@ GeneratorStr = str
 class CompilerKit:
     """CompilerKit data
 
-    cc: c compiler path
-    cxx: cxx compiler path
+    c_compiler: c compiler path
+    cxx_compiler: cxx_compiler compiler path
     generator: prefered generator
     """
 
     name: str
-    cc: PathStr
-    cxx: PathStr
+    c_compiler: PathStr
+    cxx_compiler: PathStr
     generator: GeneratorStr
 
 

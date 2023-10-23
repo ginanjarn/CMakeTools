@@ -92,8 +92,8 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
     def configure(self, source_path: Path, build_path: Path = ""):
         with sublime_settings.Settings() as settings:
             build_config = settings.get("build_config", "Debug")
-            c_compiler = settings.get("cc", "")
-            cxx_compiler = settings.get("cxx", "")
+            c_compiler = settings.get("c_compiler", "")
+            cxx_compiler = settings.get("cxx_compiler", "")
             generator = settings.get("generator", "")
 
         build_path = Path(source_path).joinpath("build")
@@ -198,8 +198,8 @@ class KitManager:
         for item in data:
             yield kit.CompilerKit(
                 name=item["name"],
-                cc=item["cc"],
-                cxx=item["cxx"],
+                c_compiler=item["c_compiler"],
+                cxx_compiler=item["cxx_compiler"],
                 generator=item["generator"],
             )
 
@@ -221,7 +221,12 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
         thread.start()
 
     def _run(self, scan: bool = False):
-        kit_items = list(self.load_cache())
+        try:
+            kit_items = list(self.load_cache())
+        except Exception:
+            # force scan if exception
+            scan = True
+
         if scan or (not kit_items):
             sublime.status_message("Scanning compilers...")
             kit_items = list(self.scan())
@@ -229,7 +234,7 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
 
             self.save_cache(kit_items)
 
-        titles = [f"[{item.name.upper()}] {item.cc}" for item in kit_items]
+        titles = [f"[{item.name.upper()}] {item.c_compiler}" for item in kit_items]
         titles.append("Scan kits...")
 
         def on_select(index=-1):
@@ -240,8 +245,8 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
                 return
 
             with sublime_settings.Settings(save=True) as settings:
-                settings["cc"] = kit_items[index].cc
-                settings["cxx"] = kit_items[index].cxx
+                settings["c_compiler"] = kit_items[index].c_compiler
+                settings["cxx_compiler"] = kit_items[index].cxx_compiler
 
                 # set generator if empty
                 if not settings.get("generator"):
@@ -285,7 +290,11 @@ class CmaketoolsKitScanEvent(sublime_plugin.ViewEventListener):
         # set kit if not configured
         with sublime_settings.Settings(save=True) as settings:
             if all(
-                [settings.get("cc"), settings.get("cxx"), settings.get("generator")]
+                [
+                    settings.get("c_compiler"),
+                    settings.get("cxx_compiler"),
+                    settings.get("generator"),
+                ]
             ):
                 return
 
