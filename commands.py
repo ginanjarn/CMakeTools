@@ -60,14 +60,19 @@ def show_empty_panel(panel: OutputPanel):
 
 
 def get_workspace_path(view: sublime.View) -> Path:
-    window = view.window()
     file_name = view.file_name()
+    folders = [
+        folder for folder in view.window().folders() if file_name.startswith(folder)
+    ]
 
-    if folders := [
-        folder for folder in window.folders() if file_name.startswith(folder)
-    ]:
-        return Path(max(folders))
-    return Path(file_name).parent
+    # sort form shortest path
+    folders.sort()
+    # set first folder contain 'CMakeLists.txt' as workspace path
+    for folder in folders:
+        if (path := Path(folder).joinpath("CMakeLists.txt")) and path.is_file():
+            return path.parent
+
+    raise FileNotFoundError("unable find 'CMakeLists.txt'")
 
 
 OUTPUT_PANEL = OutputPanel()
