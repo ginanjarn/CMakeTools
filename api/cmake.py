@@ -4,17 +4,8 @@ import os
 import sys
 import shlex
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
-
-
-@dataclass
-class Params:
-    """Base Params object"""
-
-    def command(self) -> List[str]:
-        raise NotImplementedError
+from typing import List, Optional, Iterable, Iterator, Any
 
 
 BUILD_TYPES = [
@@ -78,80 +69,90 @@ class DefaultWriter(StreamWriter):
         return n
 
 
-GeneratorKit = str
-Target = str
-BuildType = str
+def normalize(commands: Iterable[Any]) -> Iterator[str]:
+    for command in commands:
+        if isinstance(command, Path):
+            yield command.as_posix()
+        else:
+            yield str(command)
 
 
-@dataclass
-class Configure(Params):
-    build_type: BuildType
-    c_compiler: Path
-    cxx_compiler: Path
-    source_path: Path
-    build_path: Path
-    generator: GeneratorKit
+class CMakeCommand:
+    def __init__(self, executable: Path, *args):
+        self._commands = [executable, *args]
 
-    def command(self) -> List[str]:
-        cmd = [
-            "cmake",
-            "--no-warn-unused-cli",
-            "-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE",
-            f"-S{Path(self.source_path).as_posix()}",
-            f"-B{Path(self.build_path).as_posix()}",
-        ]
+    def command(self):
+        return list(normalize(self._commands))
 
-        if self.build_type:
-            cmd.append(f"-DCMAKE_BUILD_TYPE:STRING={self.build_type}")
-        if self.c_compiler:
-            cmd.append(f"-DCMAKE_C_COMPILER:FILEPATH={self.c_compiler}")
-        if self.c_compiler:
-            cmd.append(f"-DCMAKE_CXX_COMPILER:FILEPATH={self.cxx_compiler}")
+    @classmethod
+    def configure(
+        cls,
+        executable: Path,
+        source: Path,
+        build: Path,
+        *,
+        generator: str = "",
+        cache_entry: dict = None,
+        options: List[str] = None,
+    ):
+        entries = [f"-D{k}={v}" for k, v in cache_entry.items()] if cache_entry else []
+        generator_arg = ["-G", generator] if generator else []
+        options = options or []
+        options.extend(
+            ["--no-warn-unused-cli", "-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE"]
+        )
 
-        if self.generator:
-            cmd.extend(
-                [
-                    "-G",
-                    self.generator,
-                ]
-            )
+        return cls(
+            executable, "-S", source, "-B", build, *entries, *generator_arg, *options
+        )
 
-        return cmd
+    @classmethod
+    def build(
+        cls,
+        executable: Path,
+        build: Path,
+        *,
+        config: str = "Debug",
+        target: str = "all",
+        njobs: int = 4,
+        options: List[str] = None,
+    ):
+        args = ["--config", config, "--target", target, "-j", njobs]
+        options = options or []
+        return cls(executable, "--build", build, *args, *options, "--")
+
+    @classmethod
+    def install(
+        cls,
+        executable: Path,
+        build: Path,
+        *,
+        config: str = "Debug",
+        options: List[str] = None,
+    ):
+        args = ["--config", config]
+        options = options or []
+        return cls(executable, "--install", build, *args, *options)
 
 
-@dataclass
-class Build(Params):
-    build_path: Path
-    config: BuildType
-    target: Target
-    njobs: int = 4
+class CTestCommand:
+    def __init__(self, executable: Path, *args):
+        self._commands = [executable, *args]
 
-    def command(self) -> List[str]:
-        return [
-            "cmake",
-            "--build",
-            self.build_path.as_posix(),
-            "--config",
-            self.config,
-            "--target",
-            "all",
-            "-j4",
-            "--",
-        ]
+    def command(self):
+        return list(normalize(self._commands))
 
-
-@dataclass
-class CTest(Params):
-    build_path: Path
-    config: BuildType
-
-    def command(self) -> List[str]:
-        return [
-            "ctest",
-            "-j4",
-            "-C",
-            self.config,
-            "-T",
-            "test",
-            "--output-on-failure",
-        ]
+    @classmethod
+    def ctest(
+        cls,
+        executable: Path,
+        build: Path,
+        *,
+        config: str = "Debug",
+        target: str = "test",
+        njobs: int = 4,
+        options: List[str] = None,
+    ):
+        options = options or []
+        options.extend(["-j", njobs, "-C", config, "-T", target, "--output-on-failure"])
+        return cls(executable, "--test-dir", build, *options)

@@ -1,10 +1,21 @@
 {
-	// Compiler Path
-	"cc": "",
-	"cxx": "",
-	// Build generator
-	// e.g: Ninja, MinGW Makefiles, NMake Makefiles, Unix Makefiles, etc...
+	// executable path
+	"cmake": "",
+	"ctest": "",
+	"cpack": "",
+
+	// build generator
 	"generator": "",
-	// Configure project on save
-	"configure_on_save": true
+	
+	// build prefix '$(cwd)/build'
+	"build_prefix": "build",
+	// parallel jobs
+	"jobs": 4,
+
+	// cmake cache entry
+	"CMAKE_BUILD_TYPE": "Debug",
+	"CMAKE_C_COMPILER": "",
+	"CMAKE_CXX_COMPILER": "",
+	"CMAKE_INSTALL_PREFIX": "",
+
 }

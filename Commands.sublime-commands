@@ -14,7 +14,7 @@
 	{
 		"args":
 		{
-			"build_config": "Release"
+			"config": "Release"
 		},
 		"caption": "CMake: Build (Release)",
 		"command": "cmaketools_build"
@@ -22,7 +22,7 @@
 	{
 		"args":
 		{
-			"build_config": "RelWithDebInfo"
+			"config": "RelWithDebInfo"
 		},
 		"caption": "CMake: Build (RelWithDebInfo)",
 		"command": "cmaketools_build"
@@ -30,7 +30,7 @@
 	{
 		"args":
 		{
-			"build_config": "MinSizeRel"
+			"config": "MinSizeRel"
 		},
 		"caption": "CMake: Build (MinSizeRel)",
 		"command": "cmaketools_build"

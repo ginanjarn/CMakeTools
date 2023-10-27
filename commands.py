@@ -83,28 +83,35 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
 
     def run(self):
         source_path = get_workspace_path(self.window.active_view())
-        build_path = source_path.joinpath("build")
 
-        thread = threading.Thread(
-            target=self.configure,
-            args=(
-                source_path,
-                build_path,
-            ),
-        )
+        thread = threading.Thread(target=self.configure, args=(source_path,))
         thread.start()
 
-    def configure(self, source_path: Path, build_path: Path = ""):
-        with sublime_settings.Settings() as settings:
-            build_config = settings.get("build_config", "Debug")
-            c_compiler = settings.get("c_compiler", "")
-            cxx_compiler = settings.get("cxx_compiler", "")
-            generator = settings.get("generator", "")
+    @staticmethod
+    def omit_empty(mapping: dict) -> dict:
+        return {k: v for k, v in mapping.items() if v}
 
-        build_path = Path(source_path).joinpath("build")
-        params = cmake.Configure(
-            build_config, c_compiler, cxx_compiler, source_path, build_path, generator
+    def configure(self, source_path: Path):
+        with sublime_settings.Settings() as settings:
+            cmake_path = settings.get("cmake") or "cmake"
+            generator = settings.get("generator")
+            build_prefix = settings.get("build_prefix") or "build"
+
+            raw_cache_entry = {
+                k: v for k, v in settings.to_dict().items() if k.startswith("CMAKE_")
+            }
+
+            build_path = source_path.joinpath(build_prefix)
+            cache_entry = self.omit_empty(raw_cache_entry)
+
+        params = cmake.CMakeCommand.configure(
+            cmake_path,
+            source_path,
+            build_path,
+            generator=generator,
+            cache_entry=cache_entry,
         )
+
         show_empty_panel(OUTPUT_PANEL)
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL)
 
@@ -117,24 +124,29 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
     build_event = threading.Event()
 
-    def run(self, build_config: str = ""):
+    def run(self, config: str = "Debug", target: str = "all"):
         source_path = get_workspace_path(self.window.active_view())
-        build_path = source_path.joinpath("build")
 
         thread = threading.Thread(
             target=self.build,
-            args=(build_path, build_config),
+            args=(source_path, config, target),
         )
         thread.start()
 
-    def build(self, build_path: Path, build_config: str = ""):
+    def build(self, source_path: Path, config: str = "", target: str = ""):
         self.save_all_buffer(self.window)
 
         with sublime_settings.Settings() as settings:
-            config = build_config or settings.get("build_config", "Debug")
-            target = settings.get("build_target", "all")
+            cmake_path = settings.get("cmake") or "cmake"
+            build_prefix = settings.get("build_prefix") or "build"
+            njobs = settings.get("jobs") or 4
 
-        params = cmake.Build(build_path, config, target)
+            build_path = source_path.joinpath(build_prefix)
+
+        params = cmake.CMakeCommand.build(
+            cmake_path, build_path, config=config, target=target, njobs=njobs
+        )
+
         show_empty_panel(OUTPUT_PANEL)
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL)
 
@@ -158,26 +170,34 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
     """"""
 
-    def run(self):
+    def run(self, config: str = "Debug", target: str = "test"):
         source_path = get_workspace_path(self.window.active_view())
-        build_path = source_path.joinpath("build")
 
         thread = threading.Thread(
             target=self.test,
-            args=(build_path,),
+            args=(source_path, config, target),
         )
         thread.start()
 
-    def test(self, build_path: Path):
+    def test(self, source_path: Path, config: str = "", target: str = ""):
         # build project before run 'ctest'
         CmaketoolsBuildCommand.build_event.clear()
         self.window.run_command("cmaketools_build")
         CmaketoolsBuildCommand.build_event.wait()
 
         with sublime_settings.Settings() as settings:
-            config = settings.get("build_config", "Debug")
+            ctest_path = settings.get("ctest") or "ctest"
+            build_prefix = settings.get("build_prefix") or "build"
+            njobs = settings.get("jobs") or 4
 
-        params = cmake.CTest(build_path, config)
+            build_path = source_path.joinpath(build_prefix)
+
+        params = cmake.CTestCommand.ctest(
+            ctest_path, build_path, config=config, target=target, njobs=njobs
+        )
+
+        print(params.command())
+
         OUTPUT_PANEL.show()
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL, cwd=build_path)
 
