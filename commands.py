@@ -242,6 +242,9 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
         titles = [f"[{item.name.upper()}] {item.c_compiler}" for item in kit_items]
         titles.append("Scan kits...")
 
+        def to_posix_path(path: str) -> str:
+            return Path(path).as_posix()
+
         def on_select(index=-1):
             if index < 0:
                 return
@@ -250,12 +253,17 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
                 return
 
             with sublime_settings.Settings(save=True) as settings:
-                settings["c_compiler"] = kit_items[index].c_compiler
-                settings["cxx_compiler"] = kit_items[index].cxx_compiler
+                # cmake error on forward slash('\') separated path
+                settings.set(
+                    "CMAKE_C_COMPILER", to_posix_path(kit_items[index].c_compiler)
+                )
+                settings.set(
+                    "CMAKE_CXX_COMPILER", to_posix_path(kit_items[index].cxx_compiler)
+                )
 
                 # set generator if empty
                 if not settings.get("generator"):
-                    settings["generator"] = kit_items[index].generator
+                    settings.set("generator", kit_items[index].generator)
 
             # we must remove 'CMakeCache.txt' to apply changes
             self.remove_cmakecache()
