@@ -60,6 +60,12 @@ def show_empty_panel(panel: OutputPanel):
 
 
 def get_workspace_path(view: sublime.View) -> Path:
+    """get workspace path
+    Use directory contain 'CMakeLists.txt' as workspace path.
+
+    Raise FileNotFoundError if not found.
+    """
+
     file_name = view.file_name()
     folders = [
         folder for folder in view.window().folders() if file_name.startswith(folder)
@@ -78,11 +84,20 @@ def get_workspace_path(view: sublime.View) -> Path:
 OUTPUT_PANEL = OutputPanel()
 
 
+def show_workspace_error(error: Exception):
+    message = f"Unable find project!\n\nError: {error} in projects."
+    sublime.error_message(message)
+
+
 class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
     """"""
 
     def run(self):
-        source_path = get_workspace_path(self.window.active_view())
+        try:
+            source_path = get_workspace_path(self.window.active_view())
+        except Exception as err:
+            show_workspace_error(err)
+            return
 
         thread = threading.Thread(target=self.configure, args=(source_path,))
         thread.start()
@@ -125,7 +140,11 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
     build_event = threading.Event()
 
     def run(self, config: str = "Debug", target: str = "all"):
-        source_path = get_workspace_path(self.window.active_view())
+        try:
+            source_path = get_workspace_path(self.window.active_view())
+        except Exception as err:
+            show_workspace_error(err)
+            return
 
         thread = threading.Thread(
             target=self.build,
@@ -171,7 +190,11 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
     """"""
 
     def run(self, config: str = "Debug", target: str = "test"):
-        source_path = get_workspace_path(self.window.active_view())
+        try:
+            source_path = get_workspace_path(self.window.active_view())
+        except Exception as err:
+            show_workspace_error(err)
+            return
 
         thread = threading.Thread(
             target=self.test,
@@ -291,9 +314,9 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
         self.window.show_quick_panel(titles, on_select=on_select)
 
     def remove_cmakecache(self):
-        source_path = get_workspace_path(self.window.active_view())
-        cmake_cache = source_path.joinpath("build", "CMakeCache.txt")
         try:
+            source_path = get_workspace_path(self.window.active_view())
+            cmake_cache = source_path.joinpath("build", "CMakeCache.txt")
             os.remove(cmake_cache)
         except FileNotFoundError:
             pass
