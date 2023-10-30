@@ -1,4 +1,7 @@
 {
+	// config
+	"configure_on_save": true,
+
 	// executable path
 	"cmake": "",
 	"ctest": "",
