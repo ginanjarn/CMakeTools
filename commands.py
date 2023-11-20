@@ -331,16 +331,14 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
 
 
 def valid_build_source(view: sublime.View):
-    return any(
-        [
-            view.match_selector(0, "source.cmake"),
-            view.match_selector(0, "source.c++"),
-            view.match_selector(0, "source.c"),
-        ]
-    )
+    if not view:
+        return False
+    return view.match_selector(0, "source.cmake,source.c++,source.c")
 
 
 def valid_source(view: sublime.View):
+    if not view:
+        return False
     return view.match_selector(0, "source.cmake")
 
 
