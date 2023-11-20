@@ -20,21 +20,29 @@ class OutputPanel:
     def __init__(self):
         self.panel_name = "cmaketools"
         self.panel: sublime.View = None
-        self.window: sublime.Window = None
+
+    @property
+    def window(self) -> sublime.Window:
+        return sublime.active_window()
 
     def create_panel(self) -> None:
-        self.window = sublime.active_window()
+        if self.panel and self.panel.is_valid():
+            return
+
         self.panel = self.window.create_output_panel(self.panel_name)
 
-        settings = self.panel.settings()
-        settings["gutter"] = False
-        settings["auto_indent"] = False
+        settings = {
+            "gutter": False,
+            "auto_indent": False,
+            "word_wrap": False,
+        }
+        self.panel.settings().update(settings)
         self.panel.set_read_only(False)
 
     def show(self) -> None:
         """show panel"""
-        if not self.panel:
-            self.create_panel()
+        # ensure panel is created
+        self.create_panel()
 
         self.window.run_command("show_panel", {"panel": f"output.{self.panel_name}"})
 
@@ -46,8 +54,8 @@ class OutputPanel:
         self.panel.run_command("left_delete")
 
     def write(self, s: str) -> int:
-        if not self.panel:
-            self.create_panel()
+        # ensure panel is created
+        self.create_panel()
 
         self.panel.run_command("insert", {"characters": s})
         return len(s)
