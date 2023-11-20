@@ -40,7 +40,7 @@
 		{
 			"panel": "output.cmaketools"
 		},
-		"caption": "CMake: Show Build Results",
+		"caption": "CMake: Show Output Panel",
 		"command": "show_panel"
 	},
 	{
