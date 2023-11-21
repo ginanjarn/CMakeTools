@@ -119,6 +119,7 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
             cmake_path = settings.get("cmake") or "cmake"
             generator = settings.get("generator")
             build_prefix = settings.get("build_prefix") or "build"
+            envs = settings.get("envs")
 
             raw_cache_entry = {
                 k: v for k, v in settings.to_dict().items() if k.startswith("CMAKE_")
@@ -136,7 +137,7 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
         )
 
         show_empty_panel(OUTPUT_PANEL)
-        cmake.exec_childprocess(params.command(), OUTPUT_PANEL)
+        cmake.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
 
     def is_enabled(self):
         return valid_build_source(self.window.active_view())
@@ -167,6 +168,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
             cmake_path = settings.get("cmake") or "cmake"
             build_prefix = settings.get("build_prefix") or "build"
             njobs = settings.get("jobs") or 4
+            envs = settings.get("envs")
 
             build_path = source_path.joinpath(build_prefix)
 
@@ -175,7 +177,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         )
 
         show_empty_panel(OUTPUT_PANEL)
-        cmake.exec_childprocess(params.command(), OUTPUT_PANEL)
+        cmake.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
 
         self.build_event.set()
 

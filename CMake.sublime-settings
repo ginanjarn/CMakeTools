@@ -5,4 +5,32 @@
 
 	// Set to true to insert spaces when tab is pressed
 	"translate_tabs_to_spaces": false,
+
+	// Configure project on save.
+	"configure_on_save": true,
+
+	// Executable path.
+	"cmake": "",
+	"ctest": "",
+	"cpack": "",
+
+	// Build generator.
+	"generator": "",
+	
+	// Build prefix. Default set to '$(cwd)/build'.
+	"build_prefix": "build",
+
+	// Parallel jobs.
+	"jobs": 4,
+
+	// CMake cache entry.
+	// This variable passed as cmake argument eg. '-DCMAKE_BUILD_TYPE'.
+	"CMAKE_BUILD_TYPE": "Debug",
+	"CMAKE_C_COMPILER": "",
+	"CMAKE_CXX_COMPILER": "",
+	"CMAKE_INSTALL_PREFIX": "",
+
+	// Environment variables.
+	// Variable must stored as mapping eg. {"key":value}.
+	"envs": null
 }

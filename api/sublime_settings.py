@@ -3,10 +3,12 @@
 from contextlib import contextmanager
 import sublime
 
+SETTINGS_BASENAME = "CMake.sublime-settings"
+
 
 @contextmanager
 def Settings(
-    *, base_name: str = "CMakeTools.sublime-settings", save: bool = False
+    *, base_name: str = SETTINGS_BASENAME, save: bool = False
 ) -> sublime.Settings:
     """sublime settings"""
 
