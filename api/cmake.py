@@ -15,6 +15,13 @@ BUILD_TYPES = [
     "MinSizeRel",
 ]
 
+if os.name == "nt":
+    # if on Windows, hide process window
+    STARTUPINFO = subprocess.STARTUPINFO()
+    STARTUPINFO.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
+else:
+    STARTUPINFO = None
+
 
 class StreamWriter:
     """Stream writer interface"""
@@ -37,6 +44,16 @@ def exec_childprocess(
 
     print(f"execute '{shlex.join(command)}'")
 
+    # ensure if cwd is directory
+    if not (cwd and Path(cwd).is_dir()):
+        cwd = None
+
+    # update from current environment
+    if env:
+        environ = os.environ
+        env = environ.update(env)
+        env = environ
+
     process = subprocess.Popen(
         command,
         # stdin=subprocess.PIPE,
@@ -53,14 +70,6 @@ def exec_childprocess(
         writer.write(line.rstrip().decode() + "\n")
 
     return process.poll()
-
-
-if os.name == "nt":
-    # if on Windows, hide process window
-    STARTUPINFO = subprocess.STARTUPINFO()
-    STARTUPINFO.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-else:
-    STARTUPINFO = None
 
 
 class DefaultWriter(StreamWriter):
