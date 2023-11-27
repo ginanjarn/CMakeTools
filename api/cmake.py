@@ -5,7 +5,7 @@ import sys
 import shlex
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Iterable, Iterator, Any
+from typing import List, Dict, Optional, Iterable, Iterator, Any
 
 
 BUILD_TYPES = [
@@ -79,6 +79,7 @@ class DefaultWriter(StreamWriter):
 
 
 def normalize(commands: Iterable[Any]) -> Iterator[str]:
+    """normalize commands to str"""
     for command in commands:
         if isinstance(command, Path):
             yield command.as_posix()
@@ -86,82 +87,69 @@ def normalize(commands: Iterable[Any]) -> Iterator[str]:
             yield str(command)
 
 
-class CMakeCommand:
-    def __init__(self, executable: Path, *args):
-        self._commands = [executable, *args]
-
-    def command(self):
-        return list(normalize(self._commands))
-
-    @classmethod
-    def configure(
-        cls,
-        executable: Path,
-        source: Path,
-        build: Path,
-        *,
-        generator: str = "",
-        cache_entry: dict = None,
-        options: List[str] = None,
-    ):
-        entries = [f"-D{k}={v}" for k, v in cache_entry.items()] if cache_entry else []
-        generator_arg = ["-G", generator] if generator else []
-        options = options or []
-        options.extend(
+class CMakeConfigureCommand:
+    def __init__(self, executable: Path, source: Path, build: Path):
+        self._commands = [executable, "-S", source, "-B", build]
+        self._commands.extend(
             ["--no-warn-unused-cli", "-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE"]
         )
 
-        return cls(
-            executable, "-S", source, "-B", build, *entries, *generator_arg, *options
-        )
+    def command(self) -> List[str]:
+        return list(normalize(self._commands))
 
-    @classmethod
-    def build(
-        cls,
-        executable: Path,
-        build: Path,
-        *,
-        config: str = "Debug",
-        target: str = "all",
-        njobs: int = 4,
-        options: List[str] = None,
-    ):
-        args = ["--config", config, "--target", target, "-j", njobs]
-        options = options or []
-        return cls(executable, "--build", build, *args, *options, "--")
+    def set_generator(self, generator: str):
+        if generator:
+            self._commands.extend(["-G", generator])
+        return self
 
-    @classmethod
-    def install(
-        cls,
-        executable: Path,
-        build: Path,
-        *,
-        config: str = "Debug",
-        options: List[str] = None,
-    ):
-        args = ["--config", config]
-        options = options or []
-        return cls(executable, "--install", build, *args, *options)
+    def set_cmake_variables(self, variables: Dict[str, Any]):
+        if variables:
+            variables = [f"-D{k}={v}" for k, v in variables.items()]
+            self._commands.extend(variables)
+        return self
+
+
+class CMakeBuildCommand:
+    def __init__(self, executable: Path, build: Path):
+        self._commands = [executable, "--build", build]
+
+    def command(self) -> List[str]:
+        return list(normalize(self._commands))
+
+    def set_config(self, config: str):
+        if config:
+            self._commands.extend(["--config", config])
+        return self
+
+    def set_target(self, target: str):
+        if target:
+            self._commands.extend(["--target", target])
+        return self
+
+    def set_parallel_jobs(self, njobs):
+        if njobs:
+            self._commands.extend(["-j", njobs])
+        return self
 
 
 class CTestCommand:
-    def __init__(self, executable: Path, *args):
-        self._commands = [executable, *args]
+    def __init__(self, executable: Path, build: Path):
+        self._commands = [executable, "--test-dir", build, "--output-on-failure"]
 
-    def command(self):
+    def command(self) -> List[str]:
         return list(normalize(self._commands))
 
-    @classmethod
-    def ctest(
-        cls,
-        executable: Path,
-        build: Path,
-        *,
-        config: str = "Debug",
-        target: str = "test",
-        njobs: int = 4,
-        options: List[str] = None,
-    ):
-        options = options or []
-        options.extend(["-j", njobs, "-C", config, "-T", target, "--output-on-failure"])
-        return cls(executable, "--test-dir", build, *options)
+    def set_config(self, config: str):
+        if config:
+            self._commands.extend(["--config", config])
+        return self
+
+    def set_target(self, target: str):
+        if target:
+            self._commands.extend(["--target", target])
+        return self
+
+    def set_parallel_jobs(self, njobs):
+        if njobs:
+            self._commands.extend(["-j", njobs])
+        return self

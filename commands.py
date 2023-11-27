@@ -121,20 +121,15 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
             build_prefix = settings.get("build_prefix") or "build"
             envs = settings.get("envs")
 
-            raw_cache_entry = {
+            user_setting_variables = {
                 k: v for k, v in settings.to_dict().items() if k.startswith("CMAKE_")
             }
 
             build_path = source_path.joinpath(build_prefix)
-            cache_entry = self.omit_empty(raw_cache_entry)
+            cache_variables = self.omit_empty(user_setting_variables)
 
-        params = cmake.CMakeCommand.configure(
-            cmake_path,
-            source_path,
-            build_path,
-            generator=generator,
-            cache_entry=cache_entry,
-        )
+        params = cmake.CMakeConfigureCommand(cmake_path, source_path, build_path)
+        params.set_generator(generator).set_cmake_variables(cache_variables)
 
         show_empty_panel(OUTPUT_PANEL)
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
@@ -169,13 +164,11 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
             build_prefix = settings.get("build_prefix") or "build"
             njobs = settings.get("jobs") or 4
             envs = settings.get("envs")
-            config = config or settings.get("CMAKE_BUILD_TYPE")
 
             build_path = source_path.joinpath(build_prefix)
 
-        params = cmake.CMakeCommand.build(
-            cmake_path, build_path, config=config, target=target, njobs=njobs
-        )
+        params = cmake.CMakeBuildCommand(cmake_path, build_path)
+        params.set_config(config).set_target(target).set_parallel_jobs(njobs)
 
         show_empty_panel(OUTPUT_PANEL)
         cmake.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
@@ -223,13 +216,11 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
             ctest_path = settings.get("ctest") or "ctest"
             build_prefix = settings.get("build_prefix") or "build"
             njobs = settings.get("jobs") or 4
-            config = config or settings.get("CMAKE_BUILD_TYPE")
 
             build_path = source_path.joinpath(build_prefix)
 
-        params = cmake.CTestCommand.ctest(
-            ctest_path, build_path, config=config, target=target, njobs=njobs
-        )
+        params = cmake.CTestCommand(ctest_path, build_path)
+        params.set_config(config).set_target(target).set_parallel_jobs(njobs)
 
         print(params.command())
 
