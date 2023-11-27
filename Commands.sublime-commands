@@ -6,6 +6,14 @@
 	{
 		"caption": "CMake: Configure...",
 		"command": "cmaketools_configure"
+	},	
+	{
+		"args":
+		{
+			"target": "clean"
+		},
+		"caption": "CMake: Clean Build",
+		"command": "cmaketools_build"
 	},
 	{
 		"caption": "CMake: Build",
@@ -14,25 +22,17 @@
 	{
 		"args":
 		{
+			"config": "Debug"
+		},
+		"caption": "CMake: Build (Debug)",
+		"command": "cmaketools_build"
+	},
+	{
+		"args":
+		{
 			"config": "Release"
 		},
 		"caption": "CMake: Build (Release)",
-		"command": "cmaketools_build"
-	},
-	{
-		"args":
-		{
-			"config": "RelWithDebInfo"
-		},
-		"caption": "CMake: Build (RelWithDebInfo)",
-		"command": "cmaketools_build"
-	},
-	{
-		"args":
-		{
-			"config": "MinSizeRel"
-		},
-		"caption": "CMake: Build (MinSizeRel)",
 		"command": "cmaketools_build"
 	},
 	{
