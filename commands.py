@@ -148,7 +148,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
     build_event = threading.Event()
 
-    def run(self, config: str = "Debug", target: str = "all"):
+    def run(self, config: str = "", target: str = ""):
         try:
             source_path = get_workspace_path(self.window.active_view())
         except Exception as err:
@@ -169,6 +169,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
             build_prefix = settings.get("build_prefix") or "build"
             njobs = settings.get("jobs") or 4
             envs = settings.get("envs")
+            config = config or settings.get("CMAKE_BUILD_TYPE")
 
             build_path = source_path.joinpath(build_prefix)
 
@@ -199,7 +200,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
     """"""
 
-    def run(self, config: str = "Debug", target: str = "test"):
+    def run(self, config: str = "", target: str = "test"):
         try:
             source_path = get_workspace_path(self.window.active_view())
         except Exception as err:
@@ -222,6 +223,7 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
             ctest_path = settings.get("ctest") or "ctest"
             build_prefix = settings.get("build_prefix") or "build"
             njobs = settings.get("jobs") or 4
+            config = config or settings.get("CMAKE_BUILD_TYPE")
 
             build_path = source_path.joinpath(build_prefix)
 
