@@ -8,171 +8,166 @@ file_extensions:
 scope: source.cmake
 
 variables:
-  identifier: '[a-zA-Z_][a-zA-Z0-9_\-]{,64}'
-  var_identifier: '[a-zA-Z_][a-zA-Z0-9_\-\$\{\}]{,64}'
-  punctuation: '\(\)\"\$\{\}\<\>\;\#'
+  identifier: '[A-Z-a-z_][A-Z-a-z0-9_]*'
+  space: '[ \t]'
+  newline: '\n'
+  escaped: '\\[^A-Z-a-z0-9;]|\\[trn;]'
+  bracket_open: '\[=*\['
+  bracket_close: '\]=*\]'
 
 contexts:
   main:
-    - include: command
-    - include: comment
+    - include: command_invocation
+    - include: comments
 
-  comment:
-    - match: '\#\[=*\['
-      scope: punctuation.definition.comment.begin.cmake
-      push: block_comment
+  comments:
+    - include: bracket_comment
+    - include: line_comment
 
-    - match: '\#'
-      push: line_comment
+  command_invocation:
+    - meta_content_scope: meta.command_invocation.cmake
 
-  block_comment:
-    - meta_scope: comment.block.cmake
-    - match: '\]=*\]'
-      scope: punctuation.definition.comment.end.cmake
-      pop: 1
-
-  line_comment:
-    - meta_scope: comment.line.cmake
-    - match: '\n'
-      pop: 1
-
-  command:
-    - match: '({{identifier}})\s{,5}(\()'
+    - match: '{{space}}*({{identifier}}){{space}}*(\()'
       captures:
         1: entity.name.function.cmake
-        2: punctuation.definition.parameters.begin.cmake
-      push: arguments
+        2: puctuation.definition.parameters.begin.cmake
+
+      push: command_arguments
+
+    - match: '\)'
+      scope: puctuation.definition.parameters.end.cmake
+      pop: 1
+
+  command_arguments:
+    - include: arguments
+
+    - match: '(?=\))' # let caller recapture the bracket
+      pop: 1
 
   arguments:
-    - meta_content_scope: meta.string
-    - match: '(\))'
-      captures:
-        1: punctuation.definition.parameters.end.cmake
-      pop: 1
+    - match: '{{escaped}}'
+      scope: constant.character.escape.cmake
 
-    - include: escaped
-    - include: quote
-    - include: variable
-    - include: comment
-    - include: predefined_variables
-    - include: keywords
-    - include: bracket
-
-  escaped:
-    - match: '\\[a-zA-Z{{punctuation}}]'
-      scope: constant.escaped.cmake
-
-  bracket:
     - match: '\('
-      scope: punctuation.section.begin.cmake
-      push:
-        - match: '\)'
-          scope: punctuation.section.end.cmake
-          pop: 1
-        - include: arguments
+      scope: puctuation.definition.groups.begin.cmake
+      push: groups
 
-  quote:
     - match: '\"'
+      scope: puctuation.definition.quote.begin.cmake
       push: quoted_argument
 
-  quoted_argument:
-    - meta_scope: string.quoted.cmake
-    - match: '\n'
-    - match: '\"'
+    - match: '{{bracket_open}}'
+      scope: puctuation.definition.bracket.begin.cmake
+      push: bracket_argument
+
+    - include: comments
+    - include: unquoted_argument
+
+  groups:
+    # may include multiple argumets
+    - include: arguments
+
+    - match: '\)'
+      scope: puctuation.definition.groups.end.cmake
       pop: 1
 
-    - include: escaped
-    - include: variable
+  bracket_argument:
+    - meta_scope: meta.string.bracket.cmake
+      scope: puctuation.definition.bracket.end.cmake
 
-  variable:
+    - match: '{{bracket_close}}'
+      pop: 1
+
+  quoted_argument:
+    - meta_scope: meta.string.quoted.cmake
+
+    - match: '{{escaped}}'
+      scope: constant.character.escape.cmake
+
+    - include: variable_reference
+    - include: list_separator
+
+    - match: '\"'
+      scope: puctuation.definition.quote.end.cmake
+      pop: 1
+
+  unquoted_argument:
+    - include: reserved_identifier
+
+    - include: variable_reference
+    - include: list_separator
+    - include: keywords
+
+    - match: '[^\s\(\)\#\"\\;]+'
+      scope: 'meta.string.cmake'
+
+  variable_reference:
     - match: '\$(?:ENV|CACHE)?\{'
       push:
         - meta_scope: variable.reference.cmake
+
+        - include: reserved_identifier
+        - include: variable_reference
         - match: '\}'
           pop: 1
-        - include: variable
 
     - match: '\$\('
       push:
-        - meta_scope: variable.reference.cmake
+        - meta_scope: variable.shell.cmake
+
+        - include: reserved_identifier
+        - include: variable_reference
         - match: '\)'
           pop: 1
-        - include: variable
 
     - match: '\$\<'
       push:
-        - meta_scope: variable.reference.cmake
+        - meta_scope: variable.generator.cmake
+
+        - include: reserved_identifier
+        - include: variable_reference 
         - match: '\>'
           pop: 1
-        - include: variable
 
-  predefined_variables:
-    - match: '\b(?:(?:CMAKE|CPACK|CTEST){{var_identifier}})\b'
-      scope: storage.property.cmake
+  bracket_comment:
+    - match: '#{{bracket_open}}'
+      scope: puctuation.definition.comment.begin.cmake
+      push:
+        - meta_scope: comment.bracket.cmake
 
-    - match: '\b(?:(?:PROJECT|MSVC|XCODE|MINGW|MYSY|CYGWIN|ANDROID|IOS|UNIX|APPLE|WINDOWS)[A-Z0-9_]{0,64})\b'
-      scope: storage.property.cmake
+        - match: '{{bracket_close}}'
+          scope: puctuation.definition.comment.end.cmake
+          pop: 1
+
+  line_comment:
+    - match: '#'
+      scope: puctuation.definition.comment.cmake
+      push:
+        - meta_scope: comment.line.cmake
+
+        - match: '{{newline}}'
+          pop: 1
+
+  list_separator:
+    - match: ';'
+      scope: punctuation.separator.list.cmake
+
+  reserved_identifier:
+    - match: '\b(?:CMAKE|_CMAKE)_{{identifier}}\b'
+      scope: variable.reserved.cmake
 
   keywords:
-    - match: '\b(?:CACHE|ENV|GLOBAL|{{identifier}}_SCOPE)\b'
-      scope: storage.language.cmake
-
     - match: '\b(?:AND|OR|NOT)\b'
-      scope: keyword.operator.cmake
+      scope: keyword.boolean.cmake
 
-    - match: '\b(?:ON|OFF|YES|NO|TRUE|FALSE)\b'
-      scope: constant.logical.cmake
+    - match: '\b(?:EXISTS|COMMAND|POLICY|TARGET|DEFINED)\b'
+      scope: keyword.boolean.cmake
 
-    - match: '\b(?:BOOL|FILEPATH|PATH|STRING|INTERNAL)\b'
-      scope: support.type.cmake
+    - match: '\b(?:EQUAL|LESS|LESS_EQUAL|GREATER|GREATER_EQUAL|STREQUAL|STRLESS|STRLESS_EQUAL|STRGREATER|STRGREATER_EQUAL|VERSION_EQUAL|VERSION_LESS|VERSION_LESS_EQUAL|VERSION_GREATER|VERSION_GREATER_EQUAL|PATH_EQUAL|MATCHES)\b'
+      scope: keyword.boolean.cmake
 
-    - match: '\b(?:ALIAS|STATIC|SHARED|INTERFACE|PRIVATE|PUBLIC|IMPORTED|UNKNOWN|OBJECT)\b'
-      scope: support.function.cmake
+    - match: '\b(?:ON|YES|TRUE|Y|OFF|NO|FALSE|N|IGNORE|NOTFOUND)\b'
+      scope: keyword.boolean.logical.cmake
 
-    - match: '\b(?:(?:SOURCE|INCLUDE)(?:S|_DIR|_DIRECTORIES)?)\b'
-      scope: support.type.cmake
-
-    - match: '\b(?:REQUIRED|PROPERT(?:Y|IES))\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:CALL|COMMAND|DEPENDS|PROPAGATE)\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:NAME|VERSION|LANGUAGES|DESCRIPTION|COMMENT)\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:(?:FATAL|SEND)_ERROR|(?:AUTHOR_)?WARNING|DEPRECATION|NOTICE|STATUS|VERBOSE|DEBUG|TRACE)\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:CHECK_(START|PASS|FAIL))\b'
-      scope: keyword.operator.cmake
-
-    - match: '\b(?:POLICY|TARGET|TEST)\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:DEFINED|(?:{{var_identifier}})?(?:FOUND|DEFINED|INCLUDED)|IN(?:_LIST)?)\b'
-      scope: keyword.operator.boolean.cmake
-
-    - match: '\b(?:EXISTS|IS_(?:EXISTS|NEWER_THAN|DIRECTORY|SYMLINK|ABSOLUTE))\b'
-      scope: keyword.operator.boolean.cmake
-
-    - match: '\b(?:(?:MAKE|WORKING)_(?:FILE|DIRECTORY))\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:FILE(?:S)?|DIRECTOR(?:Y|ES)|DESTINATION|PATTERN|EXCLUDE)\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:(?:RELATIVE|ABSOLUTE)_PATH)\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:(?:STR|VERSION_)?(?:EQUAL|LESS|GREATER|LESS_EQUAL|GREATER_EQUAL)|PATH_EQUAL|MATCHES)\b'
-      scope: keyword.operator.boolean.cmake
-
-    - match: '\b(?:FIND|REPLACE|SORT|FILTER|APPEND|PREPEND|INSERT|CONCAT|JOIN|LENGTH)\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:GET|REVERSE|POP_(?:BACK|FRONT)|REMOVE_(?:AT|ITEM|DUPLICATES))\b'
-      scope: support.function.cmake
-
-    - match: '\b(?:REGEX|MATCH(?:ALL)?|TOLOWER|TOUPPER|(?:SUB|APPEND_)STRING|STRIP|REPEAT)\b'
-      scope: support.function.string.cmake
+    - match: '\b(?:IS|PASS|FAIL)_{{identifier}}\b'
+      scope: keyword.boolean.logical.cmake
