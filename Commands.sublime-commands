@@ -50,5 +50,9 @@
 	{
 		"caption": "CMake: Set Compiler Kits...",
 		"command": "cmaketools_set_kits"
+	},
+	{
+		"caption": "CMake: Format Code",
+		"command": "cmaketools_document_formatting"
 	}
 ]

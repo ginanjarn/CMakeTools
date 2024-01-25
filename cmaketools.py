@@ -2,7 +2,7 @@
 
 import json
 import threading
-from dataclasses import asdict
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import List, Optional, Dict
 
@@ -11,6 +11,7 @@ import sublime_plugin
 from sublime import HoverZone
 
 from . import api
+from .api import formatter, diffutils
 
 
 def valid_context(view: sublime.View, point: int) -> bool:
@@ -138,3 +139,91 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
 
         thread = threading.Thread(target=self.help_manager.load_cache)
         thread.start()
+
+
+@dataclass
+class TextChange:
+    region: sublime.Region
+    new_text: str
+    cursor_move: int = 0
+
+    def moved_region(self, move: int) -> sublime.Region:
+        return sublime.Region(self.region.a + move, self.region.b + move)
+
+
+MULTIDOCUMENT_CHANGE_LOCK = threading.Lock()
+
+
+class CmaketoolsApplyTextChangesCommand(sublime_plugin.TextCommand):
+    def run(self, edit: sublime.Edit, changes: List[dict]):
+        text_changes = [self.to_text_change(c) for c in changes]
+        current_sel = list(self.view.sel())
+
+        with MULTIDOCUMENT_CHANGE_LOCK:
+            self.apply(edit, text_changes)
+            self.relocate_selection(current_sel, text_changes)
+            self.view.show(self.view.sel(), show_surrounds=False)
+
+    def to_text_change(self, change: dict) -> TextChange:
+        start = change["range"]["start"]
+        end = change["range"]["end"]
+
+        start_point = self.view.text_point(start["line"], start["character"])
+        end_point = self.view.text_point(end["line"], end["character"])
+
+        region = sublime.Region(start_point, end_point)
+        new_text = change["newText"]
+        cursor_move = len(new_text) - region.size()
+
+        return TextChange(region, new_text, cursor_move)
+
+    def apply(self, edit: sublime.Edit, text_changes: List[TextChange]):
+        cursor_move = 0
+        for change in text_changes:
+            replaced_region = change.moved_region(cursor_move)
+            self.view.erase(edit, replaced_region)
+            self.view.insert(edit, replaced_region.a, change.new_text)
+            cursor_move += change.cursor_move
+
+    def relocate_selection(
+        self, selections: List[sublime.Region], changes: List[TextChange]
+    ):
+        """relocate current selection following text changes"""
+        moved_selections = []
+        for selection in selections:
+            temp_selection = selection
+            for change in changes:
+                if temp_selection.begin() > change.region.begin():
+                    temp_selection.a += change.cursor_move
+                    temp_selection.b += change.cursor_move
+
+            moved_selections.append(temp_selection)
+
+        # we must clear current selection
+        self.view.sel().clear()
+        self.view.sel().add_all(moved_selections)
+
+
+class CmaketoolsDocumentFormattingCommand(sublime_plugin.TextCommand):
+    def run(self, edit: sublime.Edit):
+        if not self.view.match_selector(0, "source.cmake"):
+            print("Only format CMake files")
+            return
+
+        text = self.view.substr(sublime.Region(0, self.view.size()))
+        formatted = self.format_source(text)
+
+        self.apply_change(edit, text, formatted)
+
+    def format_source(self, text: str) -> str:
+        fmt = formatter.CMakeFormatter(text)
+        return fmt.format_source()
+
+    def apply_change(self, edit: sublime.Edit, origin: str, formatted: str, /):
+        changes = diffutils.get_text_changes(origin, formatted)
+        self.view.run_command(
+            "cmaketools_apply_text_changes", args={"changes": changes}
+        )
+
+    def is_enabled(self) -> bool:
+        return self.view and self.view.match_selector(0, "source.cmake")
