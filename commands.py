@@ -8,7 +8,7 @@ from typing import Iterator, Iterable
 import sublime
 import sublime_plugin
 
-from .api import cmake
+from .api import cmake_commands
 from .api import compiler_kit as kit
 from .api import sublime_settings
 from .api import quickstart_generator
@@ -128,11 +128,11 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
             build_path = source_path.joinpath(build_prefix)
             cache_variables = self.omit_empty(user_setting_variables)
 
-        params = cmake.CMakeConfigureCommand(cmake_path, source_path, build_path)
+        params = cmake_commands.CMakeConfigureCommand(cmake_path, source_path, build_path)
         params.set_generator(generator).set_cmake_variables(cache_variables)
 
         show_empty_panel(OUTPUT_PANEL)
-        cmake.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
 
     def is_enabled(self):
         return valid_build_source(self.window.active_view())
@@ -167,11 +167,11 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
             build_path = source_path.joinpath(build_prefix)
 
-        params = cmake.CMakeBuildCommand(cmake_path, build_path)
+        params = cmake_commands.CMakeBuildCommand(cmake_path, build_path)
         params.set_config(config).set_target(target).set_parallel_jobs(njobs)
 
         show_empty_panel(OUTPUT_PANEL)
-        cmake.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
 
         self.build_event.set()
 
@@ -219,13 +219,13 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
 
             build_path = source_path.joinpath(build_prefix)
 
-        params = cmake.CTestCommand(ctest_path, build_path)
+        params = cmake_commands.CTestCommand(ctest_path, build_path)
         params.set_config(config).set_target(target).set_parallel_jobs(njobs)
 
         print(params.command())
 
         OUTPUT_PANEL.show()
-        cmake.exec_childprocess(params.command(), OUTPUT_PANEL, cwd=build_path)
+        cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, cwd=build_path)
 
     def is_enabled(self):
         return valid_build_source(self.window.active_view())
