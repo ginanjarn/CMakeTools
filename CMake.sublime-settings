@@ -6,6 +6,9 @@
 	// Set to true to insert spaces when tab is pressed
 	"translate_tabs_to_spaces": false,
 
+	// Set to false
+	"show_definitions": false,
+
 	// Configure project on save.
 	"configure_on_save": true,
 
