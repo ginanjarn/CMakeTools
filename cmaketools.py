@@ -10,8 +10,7 @@ import sublime
 import sublime_plugin
 from sublime import HoverZone
 
-from . import api
-from .api import formatter, diffutils
+from .api import cmake_help, formatter, diffutils
 
 
 def valid_context(view: sublime.View, point: int) -> bool:
@@ -31,7 +30,7 @@ def get_workspace_path(view: sublime.View) -> str:
 
 class HelpItemManager:
     def __init__(self):
-        self.cached_helps: Dict[str, api.CMakeHelpItem] = {}
+        self.cached_helps: Dict[str, cmake_help.CMakeHelpItem] = {}
         self.cached_completions: List[sublime.CompletionItem] = []
 
         self._cache_loaded = False
@@ -54,7 +53,7 @@ class HelpItemManager:
             data = json.loads(jstr)
 
             for item in data:
-                self.cached_helps[item["name"]] = api.CMakeHelpItem(
+                self.cached_helps[item["name"]] = cmake_help.CMakeHelpItem(
                     item["type"], item["name"]
                 )
 
@@ -85,17 +84,17 @@ class HelpItemManager:
         if not cache_dir.is_dir():
             cache_dir.mkdir(parents=True)
 
-        items = api.get_helps()
+        items = cmake_help.get_helps()
         data = [asdict(item) for item in items]
         jstr = json.dumps(data, indent=2)
         self.cache_path.write_text(jstr)
 
-    def get_help(self, name: str) -> Optional[api.CMakeHelpItem]:
+    def get_help(self, name: str) -> Optional[cmake_help.CMakeHelpItem]:
         if not self._cache_loaded:
             self.load_cache()
 
         if item := self.cached_helps.get(name):
-            return api.get_docstring(item)
+            return cmake_help.get_docstring(item)
 
     def get_completions(self):
         if not self._cache_loaded:
