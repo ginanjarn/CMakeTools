@@ -31,7 +31,11 @@
 	"CMAKE_BUILD_TYPE": "Debug",
 	"CMAKE_C_COMPILER": "",
 	"CMAKE_CXX_COMPILER": "",
+	"CMAKE_PREFIX_PATH": "",
 	"CMAKE_INSTALL_PREFIX": "",
+	"CMAKE_TOOLCHAIN_FILE": "",
+	// ...
+	// you can add more cmake variable entries
 
 	// Environment variables.
 	// Variable must stored as mapping eg. {"key":value}.
