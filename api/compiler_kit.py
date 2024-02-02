@@ -7,6 +7,7 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterator
 
 from .triple import (
@@ -86,7 +87,10 @@ class Scanner:
 
     def _get_cc_path(self, compiler_path: PathStr, triple: TargetTriple) -> PathStr:
         if triple.libc == "mingw":
-            return compiler_path.replace("gcc", f"{triple.triple}-gcc")
+             gcc_path = compiler_path.replace("gcc", f"{triple.triple}-gcc")
+             if Path(gcc_path).exists():
+                return gcc_path
+
         return compiler_path
 
     def _get_generator(self, triple: TargetTriple) -> GeneratorStr:
