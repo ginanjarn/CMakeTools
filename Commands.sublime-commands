@@ -22,22 +22,6 @@
 	{
 		"args":
 		{
-			"config": "Debug"
-		},
-		"caption": "CMake: Build (Debug)",
-		"command": "cmaketools_build"
-	},
-	{
-		"args":
-		{
-			"config": "Release"
-		},
-		"caption": "CMake: Build (Release)",
-		"command": "cmaketools_build"
-	},
-	{
-		"args":
-		{
 			"panel": "output.cmaketools"
 		},
 		"caption": "CMake: Show Output Panel",

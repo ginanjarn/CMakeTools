@@ -128,7 +128,9 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
             build_path = source_path.joinpath(build_prefix)
             cache_variables = self.omit_empty(user_setting_variables)
 
-        params = cmake_commands.CMakeConfigureCommand(cmake_path, source_path, build_path)
+        params = cmake_commands.CMakeConfigureCommand(
+            cmake_path, source_path, build_path
+        )
         params.set_generator(generator).set_cmake_variables(cache_variables)
 
         show_empty_panel(OUTPUT_PANEL)
@@ -143,7 +145,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
     build_event = threading.Event()
 
-    def run(self, config: str = "", target: str = ""):
+    def run(self, target: str = ""):
         try:
             source_path = get_workspace_path(self.window.active_view())
         except Exception as err:
@@ -152,16 +154,17 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
         thread = threading.Thread(
             target=self.build,
-            args=(source_path, config, target),
+            args=(source_path, target),
         )
         thread.start()
 
-    def build(self, source_path: Path, config: str = "", target: str = ""):
+    def build(self, source_path: Path, target: str = ""):
         self.save_all_buffer(self.window)
 
         with sublime_settings.Settings() as settings:
             cmake_path = settings.get("cmake") or "cmake"
             build_prefix = settings.get("build_prefix") or "build"
+            config = settings.get("CMAKE_BUILD_TYPE")
             njobs = settings.get("jobs") or 4
             envs = settings.get("envs")
 
