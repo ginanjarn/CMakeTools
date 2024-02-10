@@ -134,7 +134,8 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
         params.set_generator(generator).set_cmake_variables(cache_variables)
 
         show_empty_panel(OUTPUT_PANEL)
-        cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        ret = cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        print(f"process terminated with exit code {ret}")
 
     def is_enabled(self):
         return valid_build_source(self.window.active_view())
@@ -174,7 +175,8 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         params.set_config(config).set_target(target).set_parallel_jobs(njobs)
 
         show_empty_panel(OUTPUT_PANEL)
-        cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        ret = cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        print(f"process terminated with exit code {ret}")
 
         self.build_event.set()
 
@@ -228,7 +230,10 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
         print(params.command())
 
         OUTPUT_PANEL.show()
-        cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, cwd=build_path)
+        ret = cmake_commands.exec_childprocess(
+            params.command(), OUTPUT_PANEL, cwd=build_path
+        )
+        print(f"process terminated with exit code {ret}")
 
     def is_enabled(self):
         return valid_build_source(self.window.active_view())

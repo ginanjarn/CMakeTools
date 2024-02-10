@@ -69,7 +69,8 @@ def exec_childprocess(
     while line := process.stdout.readline():
         writer.write(line.rstrip().decode() + "\n")
 
-    return process.poll()
+    # wait() method return 'returncode' after process terminated.
+    return process.wait()
 
 
 class DefaultWriter(StreamWriter):
