@@ -34,7 +34,7 @@ class HelpItemManager:
         self.cached_completions: List[sublime.CompletionItem] = []
 
         self._cache_loaded = False
-        self._build_lock = threading.Lock()
+        self._load_cache_lock = threading.Lock()
 
     cache_path = Path(__file__).parent.joinpath("var", "cmake_helps.json")
     type_map = {
@@ -45,41 +45,40 @@ class HelpItemManager:
     }
 
     def load_cache(self):
-        # call load_cache once only
-        self._cache_loaded = True
+        with self._load_cache_lock:
+            # call load_cache once only
+            self._cache_loaded = True
 
-        if self.cache_path.is_file():
-            jstr = self.cache_path.read_text()
-            data = json.loads(jstr)
+            try:
+                self.load_cache_file()
 
-            for item in data:
-                self.cached_helps[item["name"]] = cmake_help.CMakeHelpItem(
-                    item["type"], item["name"]
+            except Exception:
+                # build cache if failed load cache file
+                self.build_cache_file()
+
+    def load_cache_file(self):
+        jstr = self.cache_path.read_text()
+        data = json.loads(jstr)
+
+        for item in data:
+            self.cached_helps[item["name"]] = cmake_help.CMakeHelpItem(
+                item["type"], item["name"]
+            )
+
+            if item["type"] == "command":
+                snippet = item["name"] + "($0)"
+            else:
+                snippet = item["name"].replace("<", "${1:").replace(">", "}") + "$0"
+
+            self.cached_completions.append(
+                sublime.CompletionItem.snippet_completion(
+                    trigger=item["name"],
+                    snippet=snippet,
+                    kind=self.type_map[item["type"]],
                 )
+            )
 
-                if item["type"] == "command":
-                    snippet = item["name"] + "($0)"
-                else:
-                    snippet = item["name"].replace("<", "${1:").replace(">", "}") + "$0"
-
-                self.cached_completions.append(
-                    sublime.CompletionItem.snippet_completion(
-                        trigger=item["name"],
-                        snippet=snippet,
-                        kind=self.type_map[item["type"]],
-                    )
-                )
-        else:
-            # only one thread can continue
-            if self._build_lock.locked():
-                return
-
-            with self._build_lock:
-                self.build_cache()
-                # reload after build
-                self.load_cache()
-
-    def build_cache(self):
+    def build_cache_file(self):
         cache_dir = self.cache_path.parent
         if not cache_dir.is_dir():
             cache_dir.mkdir(parents=True)
