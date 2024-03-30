@@ -15,7 +15,7 @@
                                 "caption": "Settings",
                                 "command": "edit_settings",
                                 "args": {
-                                    "base_file": "${packages}/cmaketools/CMake.sublime-settings",
+                                    "base_file": "${packages}/CMakeTools/CMake.sublime-settings",
                                     "default": "// CMake Settings - User\n{\n\t$0\n}\n",
                                 }
                             },
