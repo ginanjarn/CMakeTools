@@ -4,7 +4,7 @@
 file_extensions:
   - CMakeCache.txt
 
-scope: source.cmake
+scope: source.cmake_cache
 
 variables:
   identifier: '[a-zA-Z_][a-zA-Z0-9_\-]{,64}'
@@ -25,21 +25,19 @@ contexts:
 
   statement:
     - match: '(?=[a-zA-Z_])'
-      set: property
+      push: property
 
   property:
-    - match: '({{identifier}})\s{,5}\:\s{,5}({{identifier}})\s{,5}='
+    - match: '({{identifier}})\s{,5}(?:\:\s{,5}({{identifier}})\s{,5})?='
       captures:
         1: entity.name.cmake
         2: storage.language.cmake
       push: values
 
-    - match: ''
-      pop: 1
-
   values:
+    # pop from 'property' and 'values' scope
     - match: '\n'
-      pop: 1
+      pop: 2
 
     - match: '\b(ON|OFF|YES|NO|TRUE|FALSE)\b'
       scope: constant.logical.cmake

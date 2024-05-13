@@ -10,8 +10,9 @@ scope: source.cmake
 variables:
   identifier: '[A-Z-a-z_][A-Z-a-z0-9_]*'
   space: '[ \t]'
-  newline: '\n'
-  escaped: '\\[^A-Z-a-z0-9;]|\\[trn;]'
+  newline: '[\r\n]'
+  punctuation: '"\\:;\#\[\]=\$\{\}\(\)'
+  escaped_characters: '\\[{{punctuation}}{{space}}{{newline}}]'
   bracket_open: '\[=*\['
   bracket_close: '\]=*\]'
 
@@ -32,25 +33,13 @@ contexts:
         1: entity.name.function.cmake
         2: puctuation.definition.parameters.begin.cmake
 
-      push: command_arguments
-
-    - match: '\)'
-      scope: puctuation.definition.parameters.end.cmake
-      pop: 1
-
-  command_arguments:
-    - include: arguments
-
-    - match: '(?=\))' # let caller recapture the bracket
-      pop: 1
+      push: arguments
 
   arguments:
-    - match: '{{escaped}}'
-      scope: constant.character.escape.cmake
 
     - match: '\('
       scope: puctuation.definition.groups.begin.cmake
-      push: groups
+      push: grouped_arguments
 
     - match: '\"'
       scope: puctuation.definition.quote.begin.cmake
@@ -60,45 +49,53 @@ contexts:
       scope: puctuation.definition.bracket.begin.cmake
       push: bracket_argument
 
-    - include: comments
     - include: unquoted_argument
+    - include: comments
 
-  groups:
-    # may include multiple argumets
-    - include: arguments
-
+    # closing command argument
     - match: '\)'
       scope: puctuation.definition.groups.end.cmake
       pop: 1
 
-  bracket_argument:
-    - meta_scope: meta.string.bracket.cmake
-      scope: puctuation.definition.bracket.end.cmake
+  grouped_arguments:
+    # include child argumets
+    - include: arguments
 
-    - match: '{{bracket_close}}'
+    # closing group
+    - match: '\)'
+      scope: puctuation.definition.groups.end.cmake
       pop: 1
 
-  quoted_argument:
-    - meta_scope: meta.string.quoted.cmake
-
-    - match: '{{escaped}}'
+  flat_element:
+    - match: '{{escaped_characters}}'
       scope: constant.character.escape.cmake
 
     - include: variable_reference
     - include: list_separator
 
+  bracket_argument:
+    - meta_scope: meta.string.bracket.cmake
+      scope: puctuation.definition.bracket.end.cmake
+
+    # closing bracket
+    - match: '{{bracket_close}}'
+      pop: 1
+
+  quoted_argument:
+    - meta_scope: meta.string.quoted.cmake
+    - include: flat_element
+
+    # closing quote
     - match: '\"'
       scope: puctuation.definition.quote.end.cmake
       pop: 1
 
   unquoted_argument:
+    - include: flat_element
     - include: reserved_identifier
-
-    - include: variable_reference
-    - include: list_separator
     - include: keywords
 
-    - match: '[^\s\(\)\#\"\\;]+'
+    - match: '[^\s{{punctuation}}]+'
       scope: 'meta.string.cmake'
 
   variable_reference:
@@ -106,7 +103,7 @@ contexts:
       push:
         - meta_scope: variable.reference.cmake
 
-        - include: reserved_identifier
+        # nested variable
         - include: variable_reference
         - match: '\}'
           pop: 1
@@ -115,7 +112,7 @@ contexts:
       push:
         - meta_scope: variable.shell.cmake
 
-        - include: reserved_identifier
+        # nested variable
         - include: variable_reference
         - match: '\)'
           pop: 1
@@ -124,10 +121,12 @@ contexts:
       push:
         - meta_scope: variable.generator.cmake
 
-        - include: reserved_identifier
+        # nested variable
         - include: variable_reference 
         - match: '\>'
           pop: 1
+    
+    - include: reserved_identifier
 
   bracket_comment:
     - match: '#{{bracket_open}}'
@@ -135,6 +134,7 @@ contexts:
       push:
         - meta_scope: comment.bracket.cmake
 
+        # closing bracket
         - match: '{{bracket_close}}'
           scope: puctuation.definition.comment.end.cmake
           pop: 1
@@ -153,12 +153,21 @@ contexts:
       scope: punctuation.separator.list.cmake
 
   reserved_identifier:
-    - match: '\b(?:CMAKE|_CMAKE)_{{identifier}}\b'
+    - match: '\b_?CMAKE_{{identifier}}\b'
       scope: variable.reserved.cmake
 
   keywords:
     - match: '\b(?:AND|OR|NOT)\b'
       scope: keyword.boolean.cmake
+
+    - match: '\b(?:PUBLIC|PRIVATE|INTERFACE)\b'
+      scope: keyword.target.cmake
+
+    - match: '\b(?:BOOL|FILEPATH|PATH|STRING|INTERNAL|CACHE)\b'
+      scope: keyword.set_type.cmake
+
+    - match: '\b(?:STATIC|SHARED|MODULE|ALIAS)\b'
+      scope: keyword.library_type.cmake
 
     - match: '\b(?:EXISTS|COMMAND|POLICY|TARGET|DEFINED)\b'
       scope: keyword.boolean.cmake
@@ -166,7 +175,7 @@ contexts:
     - match: '\b(?:EQUAL|LESS|LESS_EQUAL|GREATER|GREATER_EQUAL|STREQUAL|STRLESS|STRLESS_EQUAL|STRGREATER|STRGREATER_EQUAL|VERSION_EQUAL|VERSION_LESS|VERSION_LESS_EQUAL|VERSION_GREATER|VERSION_GREATER_EQUAL|PATH_EQUAL|MATCHES)\b'
       scope: keyword.boolean.cmake
 
-    - match: '\b(?:ON|YES|TRUE|Y|OFF|NO|FALSE|N|IGNORE|NOTFOUND)\b'
+    - match: '\b(?:ON|YES|TRUE|Y|OFF|NO|FALSE|N|IGNORE|NOTFOUND|NOT_\w+)\b'
       scope: keyword.boolean.logical.cmake
 
     - match: '\b(?:IS|PASS|FAIL)_{{identifier}}\b'
