@@ -3,7 +3,7 @@
 import logging
 import re
 from abc import ABC, abstractmethod
-from collections import namedtuple
+from dataclasses import dataclass
 from enum import Enum
 from typing import List, Union
 
@@ -67,8 +67,7 @@ class Parser(ABC):
     """Abstract Parser"""
 
     @abstractmethod
-    def __init__(self, source: str):
-        ...
+    def __init__(self, source: str): ...
 
     @abstractmethod
     def parse(self) -> AST:
@@ -105,7 +104,7 @@ class Leaf(AST):
         return "".join([token.text for token in self.tokens])
 
 
-class Node:
+class Node(AST):
     """Node of Syntax Tree
 
     Node is collection of Token, Leaf and Nodes
@@ -133,7 +132,13 @@ class Node:
 
     @property
     def text(self):
-        return "".join([child.text for child in self.children if child])
+        def get_text(child: AST):
+            if isinstance(child, list):
+                node = child
+                return "".join([child.text for child in node if child])
+            return child.text
+
+        return "".join([get_text(child) for child in self.children if child])
 
 
 r"""
@@ -238,15 +243,14 @@ class LineComment(Comment):
     kind = "line_comment"
 
 
-class ParensChildren(list):
-    """Children inside '(' and ')'"""
+class BracketTokens(list):
+    """List of tokens wrapped by '[=*[' and ']=*]'"""
 
 
-class BracketChildren(list):
-    """Children inside '[=*[' and ']=*]'"""
-
-
-TextPos = namedtuple("TextPos", ["row", "col"])
+@dataclass
+class TextPos:
+    row: int
+    col: int
 
 
 def rowcol(text: str, offset: int) -> TextPos:
@@ -259,7 +263,11 @@ def rowcol(text: str, offset: int) -> TextPos:
     return TextPos(linenum, colnum)
 
 
-MatchResult = namedtuple("MatchResult", ["pos", "text", "match"])
+@dataclass
+class MatchResult:
+    pos: int
+    text: str
+    match: re.Match
 
 
 class CMakeParser(Parser):
@@ -323,11 +331,23 @@ class CMakeParser(Parser):
         if space := self.get_space():
             children.append(space)
 
-        arguments_group = self.get_arguments()
-        if not arguments_group:
-            raise SyntaxError("requires '(' after identifier")
+        lparen = r"\("
+        rparen = r"\)"
 
-        children.append(Arguments(arguments_group))
+        if match := self.eat_match(lparen):
+            children.append(Token(match.pos, TokenKind.LParen, match.text))
+        else:
+            pos = rowcol(self.source, self.offset)
+            raise SyntaxError(f"requires '(' after identifier at {pos}")
+
+        children.append(self.get_arguments())
+
+        if match := self.eat_match(rparen):
+            children.append(Token(match.pos, TokenKind.RParen, match.text))
+        else:
+            pos = rowcol(self.source, self.offset)
+            raise SyntaxError(f"require closing ')' at {pos}")
+
         return CommandInvocation(children)
 
     def get_space(self) -> Token:
@@ -342,30 +362,17 @@ class CMakeParser(Parser):
             return Token(match.pos, TokenKind.Newline, match.text)
         return None
 
-    def get_arguments(self) -> ParensChildren:
+    def get_arguments(self) -> List[Argument]:
         arguments = []
-        lparen = r"\("
-        rparen = r"\)"
-
-        if match := self.eat_match(lparen):
-            arguments.append(Token(match.pos, TokenKind.LParen, match.text))
-        else:
-            return None
-
         while argument := self.get_argument():
             arguments.append(argument)
 
-        if match := self.eat_match(rparen):
-            arguments.append(Token(match.pos, TokenKind.RParen, match.text))
-        else:
-            raise SyntaxError("require ')' after '('")
-
-        return ParensChildren(arguments)
+        return arguments
 
     def get_argument(self) -> Argument:
         # argument children
         child_func = [
-            self.get_arguments,
+            self.get_grouped_arguments,
             self.get_bracket_argument,
             self.get_quoted_argument,
             self.get_unquoted_argument,
@@ -375,19 +382,35 @@ class CMakeParser(Parser):
         ]
         for func in child_func:
             if child := func():
-                # nested '()'
-                if isinstance(child, ParensChildren):
-                    return GroupedArguments(child)
-
                 return child
 
         return None
 
-    def get_bracket(self) -> BracketChildren:
+    def get_grouped_arguments(self):
+        arguments = []
+        lparen = r"\("
+        rparen = r"\)"
+
+        if match := self.eat_match(lparen):
+            arguments.append(Token(match.pos, TokenKind.LParen, match.text))
+        else:
+            return None
+
+        arguments.append(self.get_arguments())
+
+        if match := self.eat_match(rparen):
+            arguments.append(Token(match.pos, TokenKind.RParen, match.text))
+        else:
+            pos = rowcol(self.source, self.offset)
+            raise SyntaxError(f"require closing ')' at {pos}")
+
+        return GroupedArguments(arguments)
+
+    def get_bracket(self) -> BracketTokens:
         children = []
         lbracket = r"\[=*\["
         rbracket = r"\]=*\]"
-        text = r"[^\]]*"
+        text = r"(?:[^\]]|\\\])*"
 
         if match := self.eat_match(lbracket):
             children.append(Token(match.pos, TokenKind.LBracket, match.text))
@@ -400,9 +423,10 @@ class CMakeParser(Parser):
         if match := self.eat_match(rbracket):
             children.append(Token(match.pos, TokenKind.RBracket, match.text))
         else:
-            raise SyntaxError("require ']=*]' after '[=*['")
+            pos = rowcol(self.source, self.offset)
+            raise SyntaxError(f"require closing ']=*]' at {pos}")
 
-        return BracketChildren(children)
+        return BracketTokens(children)
 
     def get_bracket_argument(self) -> BracketArgument:
         if bracket := self.get_bracket():
@@ -412,10 +436,10 @@ class CMakeParser(Parser):
     def get_quoted_argument(self) -> QuotedArgument:
         children = []
         quote = r"\""
-        text = r"(?:\\\"|[^\"])+"
+        text = rf"(?:\\{quote}|[^{quote}])+"
 
         if match := self.eat_match(quote):
-            children.append(Token(match.pos, TokenKind.LBracket, match.text))
+            children.append(Token(match.pos, TokenKind.Quote, match.text))
         else:
             return None
 
@@ -423,16 +447,21 @@ class CMakeParser(Parser):
             children.append(Token(match.pos, TokenKind.Text, match.text))
 
         if match := self.eat_match(quote):
-            children.append(Token(match.pos, TokenKind.RBracket, match.text))
+            children.append(Token(match.pos, TokenKind.Quote, match.text))
         else:
-            raise SyntaxError("require '\"' after open '\"'")
+            pos = rowcol(self.source, self.offset)
+            raise SyntaxError(f"require closing '\"' at {pos}")
 
         return QuotedArgument(*children)
 
     def get_unquoted_argument(self) -> UnquotedArgument:
-        punctuation = r"\(\)\#\"\\"
-        escaped = r"\\[^A-Za-z0-9;]|\\[trn;]"
-        text = rf"(?:[^{punctuation}\s]|{escaped})+"
+        # not implemented variable punctuation
+        not_implemented = re.escape("${}<>;:")
+        punctuation = re.escape('#[]()="\\')
+        space = r" \t"
+        newline = r"[\r\n]"
+        escaped = rf"\\[{punctuation}{space}{newline}]"
+        text = rf"(?:[^{punctuation}{space}]|{escaped}|{not_implemented})+"
 
         if match := self.eat_match(text):
             return UnquotedArgument(Token(match.pos, TokenKind.Text, match.text))
@@ -440,17 +469,17 @@ class CMakeParser(Parser):
             return None
 
     def get_comment(self) -> Comment:
-        mark = r"#"
-        if match := self.eat_match(mark):
-            mark_token = Token(match.pos, TokenKind.CommentMark, match.text)
+        comment_mark = r"#"
+        if match := self.eat_match(comment_mark):
+            comment_mark_token = Token(match.pos, TokenKind.CommentMark, match.text)
 
             if bracket := self.get_bracket():
-                return BracketComment(mark_token, *bracket)
+                return BracketComment(comment_mark_token, *bracket)
 
             text = r".*"
             match_text = self.eat_match(text)
             text_token = Token(match_text.pos, TokenKind.Text, match_text.text)
 
-            return LineComment(mark_token, text_token)
+            return LineComment(comment_mark_token, text_token)
 
         return None
