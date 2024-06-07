@@ -31,7 +31,7 @@ class HelpItemManager:
     def __init__(self):
         self.help_cache = cmake_help.HelpCache()
 
-    type_map = {
+    kind_map = {
         "command": sublime.KIND_FUNCTION,
         "variable": sublime.KIND_VARIABLE,
         "property": sublime.KIND_VARIABLE,
@@ -48,8 +48,20 @@ class HelpItemManager:
 
     def get_completions(self) -> List[sublime.CompletionItem]:
         def to_completion(item: cmake_help.HelpItem):
-            return sublime.CompletionItem(
-                trigger=item.name, kind=self.type_map[item.kind]
+            if item.kind == "command":
+                params = "" if item.name.startswith("end") else "$0"
+                snippet = f"{item.name}({params})"
+
+            elif item.kind in {"variable", "property"}:
+                snippet = item.name.replace("<", "${1:").replace(">", "}")
+
+            else:
+                snippet = item.name
+
+            return sublime.CompletionItem.snippet_completion(
+                trigger=item.name,
+                kind=self.kind_map[item.kind],
+                snippet=snippet,
             )
 
         return [to_completion(item) for item in self.help_cache.get_help_item_list()]
