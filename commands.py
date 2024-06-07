@@ -1,9 +1,6 @@
-import json
 import os
 import threading
-from dataclasses import asdict
 from pathlib import Path
-from typing import Iterator, Iterable
 
 import sublime
 import sublime_plugin
@@ -218,85 +215,34 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
         return valid_build_source(self.window.active_view())
 
 
-class KitManager:
+class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand):
     """"""
 
-    def scan(self) -> Iterator[kit.CompilerKit]:
-        scanner = kit.Scanner()
-        yield from scanner.scan()
-
-    cache_path = Path(__file__).parent.joinpath("var", "compiler_kits.json")
-
-    def load_cache(self) -> Iterator[kit.CompilerKit]:
-        if not self.cache_path.is_file():
-            return
-
-        jstring = self.cache_path.read_text()
-        data = json.loads(jstring)
-        for item in data:
-            yield kit.CompilerKit(
-                name=item["name"],
-                c_compiler=item["c_compiler"],
-                cxx_compiler=item["cxx_compiler"],
-                generator=item["generator"],
-            )
-
-    def save_cache(self, kits: Iterable[kit.CompilerKit]) -> None:
-        cache_dir = self.cache_path.parent
-        if not cache_dir.is_dir():
-            cache_dir.mkdir(parents=True)
-
-        data = [asdict(item) for item in kits]
-        jstring = json.dumps(data, indent=2)
-        self.cache_path.write_text(jstring)
-
-
-class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
-    """"""
-
-    def run(self, scan: bool = False):
-        thread = threading.Thread(target=self._run, args=(scan,))
+    def run(self):
+        thread = threading.Thread(target=self._set_task)
         thread.start()
 
-    def _run(self, scan: bool = False):
-        try:
-            kit_items = list(self.load_cache())
-        except Exception:
-            # force scan if exception
-            scan = True
-
-        if scan or (not kit_items):
-            sublime.status_message("Scanning compilers...")
-            kit_items = list(self.scan())
-            sublime.status_message(f"{len(kit_items)} kits found.")
-
-            self.save_cache(kit_items)
+    def _set_task(self):
+        sublime.status_message("Scanning compilers...")
+        kit_items = kit.scan_compilers()
+        sublime.status_message(f"{len(kit_items)} kits found.")
 
         titles = [f"[{item.name.upper()}] {item.c_compiler}" for item in kit_items]
-        titles.append("Scan kits...")
-
-        def to_posix_path(path: str) -> str:
-            return Path(path).as_posix()
 
         def on_select(index=-1):
             if index < 0:
                 return
-            elif index == len(kit_items):
-                self.window.run_command("cmaketools_set_kits", {"scan": True})
-                return
+
+            item = kit_items[index]
 
             with sublime_settings.Settings(save=True) as settings:
                 # cmake error on forward slash('\') separated path
-                settings.set(
-                    "CMAKE_C_COMPILER", to_posix_path(kit_items[index].c_compiler)
-                )
-                settings.set(
-                    "CMAKE_CXX_COMPILER", to_posix_path(kit_items[index].cxx_compiler)
-                )
+                settings.set("CMAKE_C_COMPILER", Path(item.c_compiler).as_posix())
+                settings.set("CMAKE_CXX_COMPILER", Path(item.cxx_compiler).as_posix())
 
                 # set generator if empty
                 if not settings.get("generator"):
-                    settings.set("generator", kit_items[index].generator)
+                    settings.set("generator", item.generator)
 
             # we must remove 'CMakeCache.txt' to apply changes
             self.remove_cmakecache()
@@ -305,9 +251,13 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand, KitManager):
 
     def remove_cmakecache(self):
         try:
+            with sublime_settings.Settings() as settings:
+                prefix = settings.get("build_prefix") or "build"
+
             source_path = get_workspace_path(self.window.active_view())
-            cmake_cache = source_path.joinpath("build", "CMakeCache.txt")
+            cmake_cache = source_path.joinpath(prefix, "CMakeCache.txt")
             os.remove(cmake_cache)
+
         except FileNotFoundError:
             pass
 
@@ -342,7 +292,7 @@ class CmaketoolsKitScanEvent(sublime_plugin.ViewEventListener):
             ):
                 return
 
-        self.view.window().run_command("cmaketools_set_kits", {"scan": True})
+        self.view.window().run_command("cmaketools_set_kits")
 
     def on_post_save_async(self):
         if not valid_source(self.view):
