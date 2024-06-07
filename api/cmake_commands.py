@@ -82,13 +82,16 @@ class CMakeCommands(Command):
 
     @staticmethod
     def cache_entry_to_arguments(cache_entry: Dict[str, str]) -> List[str]:
-        command = []
-        for variable, value in cache_entry.items():
-            # quote value if any space inside
-            value = f'"{value}"' if " " in value else value
-            command.append(f"-D{variable}={value}")
+        """transform cache entry to argument"""
 
-        return command
+        def quote_value(value: Any) -> str:
+            """wrap with quote if value contain space"""
+            svalue = str(value)
+            if " " in svalue:
+                return f'"{value}"'
+            return svalue
+
+        return [f"-D{var}={quote_value(val)}" for (var, val) in cache_entry.items()]
 
     @classmethod
     def configure(
