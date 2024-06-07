@@ -1,5 +1,6 @@
 """cmake tools"""
 
+import html
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,7 @@ class HelpItemManager:
         if item := self.help_cache.get_help_item(name):
             doc = self.help_cache.get_cmake_documentation(item.name, item.kind)
             if doc:
-                return f"<pre>{doc}</pre>"
+                return f"<pre>{html.escape(doc)}</pre>"
 
         return ""
 
