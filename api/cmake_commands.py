@@ -2,10 +2,10 @@
 
 import os
 import sys
-import shlex
 import subprocess
+from multiprocessing import cpu_count
 from pathlib import Path
-from typing import List, Dict, Optional, Iterable, Iterator, Any
+from typing import List, Dict, Any
 
 
 BUILD_TYPES = [
@@ -30,127 +30,118 @@ class StreamWriter:
         raise NotImplementedError
 
 
-def exec_childprocess(
-    command: List[str],
-    writer: StreamWriter,
-    *,
-    cwd: Optional[str] = None,
-    env: Optional[dict] = None,
-) -> int:
-    """exec_childprocess, write result to writer object"""
+class Command:
+    """Base subprocess command"""
 
-    if isinstance(command, str):
-        command = shlex.split(command)
+    def get_command(self) -> List[str]:
+        """get command"""
 
-    print(f"execute '{shlex.join(command)}'")
 
-    # ensure if cwd is directory
-    if not (cwd and Path(cwd).is_dir()):
-        cwd = None
+ReturnCode = int
 
-    # update from current environment
-    if env:
-        environ = os.environ
-        env = environ.update(env)
-        env = environ
 
-    process = subprocess.Popen(
-        command,
+def normalize_command(command: List[Any]) -> List[str]:
+    """normalize command to str"""
+    return [str(c) for c in command]
+
+
+def exec_subprocess(
+    command: Command, output: StreamWriter, /, cwd: Path = None, env: dict = None
+) -> ReturnCode:
+    proc = subprocess.Popen(
+        normalize_command(command.get_command()),
         # stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,  # redirect to stdout
         startupinfo=STARTUPINFO,
-        bufsize=0,
+        bufsize=0,  # flush buffer
         cwd=cwd,
         shell=True,
         env=env,
     )
+    while line := proc.stdout.readline():
+        output.write(line.strip().decode() + "\n")
 
-    while line := process.stdout.readline():
-        writer.write(line.rstrip().decode() + "\n")
-
-    # wait() method return 'returncode' after process terminated.
-    return process.wait()
+    return proc.wait()
 
 
 class DefaultWriter(StreamWriter):
+    """default write to stderr"""
+
     def write(self, s: str) -> int:
         n = sys.stderr.write(s)
         return n
 
 
-def normalize(commands: Iterable[Any]) -> Iterator[str]:
-    """normalize commands to str"""
-    for command in commands:
-        if isinstance(command, Path):
-            yield command.as_posix()
-        else:
-            yield str(command)
+class CMakeCommands(Command):
+    def __init__(self, command: List[str]):
+        self._command = command
 
+    def get_command(self):
+        return self._command
 
-class CMakeConfigureCommand:
-    def __init__(self, executable: Path, source: Path, build: Path):
-        self._commands = [executable, "-S", source, "-B", build]
-        self._commands.extend(
-            ["--no-warn-unused-cli", "-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE"]
-        )
+    @staticmethod
+    def cache_entry_to_arguments(cache_entry: Dict[str, str]) -> List[str]:
+        command = []
+        for variable, value in cache_entry.items():
+            # quote value if any space inside
+            value = f'"{value}"' if " " in value else value
+            command.append(f"-D{variable}={value}")
 
-    def command(self) -> List[str]:
-        return list(normalize(self._commands))
+        return command
 
-    def set_generator(self, generator: str):
+    @classmethod
+    def configure(
+        cls,
+        source: Path,
+        build: Path,
+        *,
+        cache_entry: Dict[str, str] = None,
+        generator: str = "",
+    ):
+        command = ["cmake", "-S", str(source.as_posix()), "-B", str(build.as_posix())]
+
+        if cache_entry:
+            command.extend(cls.cache_entry_to_arguments(cache_entry))
+
         if generator:
-            self._commands.extend(["-G", generator])
-        return self
+            command.extend(["-G", generator])
 
-    def set_cmake_variables(self, variables: Dict[str, Any]):
-        if variables:
-            variables = [f"-D{k}={v}" for k, v in variables.items()]
-            self._commands.extend(variables)
-        return self
+        return cls(command)
 
+    @classmethod
+    def build(
+        cls,
+        build: Path,
+        *,
+        target: str = "all",
+        cache_entry: Dict[str, str] = None,
+        njobs: int = -1,
+    ):
+        command = ["cmake", "--build", str(build)]
+        if cache_entry:
+            command.extend(cls.cache_entry_to_arguments(cache_entry))
 
-class CMakeBuildCommand:
-    def __init__(self, executable: Path, build: Path):
-        self._commands = [executable, "--build", build]
+        command.extend(["--target", target])
 
-    def command(self) -> List[str]:
-        return list(normalize(self._commands))
+        njobs = njobs if njobs > 0 else cpu_count()
+        command.extend(["-j", njobs])
+        return cls(command)
 
-    def set_config(self, config: str):
-        if config:
-            self._commands.extend(["--config", config])
-        return self
-
-    def set_target(self, target: str):
-        if target:
-            self._commands.extend(["--target", target])
-        return self
-
-    def set_parallel_jobs(self, njobs):
-        if njobs:
-            self._commands.extend(["-j", njobs])
-        return self
+    @classmethod
+    def install(cls, build: Path, *, cache_entry: Dict[str, str] = None):
+        command = ["cmake", "--install", str(build)]
+        if cache_entry:
+            command.extend(cls.cache_entry_to_arguments(cache_entry))
+        return cls(command)
 
 
-class CTestCommand:
-    def __init__(self, executable: Path, build: Path):
-        self._commands = [executable, "--test-dir", build, "--output-on-failure"]
+class CTestCommand(Command):
+    def __init__(self, build: Path, *, njobs: int = -1):
+        self._command = ["ctest", "--test-dir", str(build)]
 
-    def command(self) -> List[str]:
-        return list(normalize(self._commands))
+        njobs = njobs if njobs > 0 else cpu_count()
+        self._command.extend(["-j", njobs])
 
-    def set_config(self, config: str):
-        if config:
-            self._commands.extend(["--config", config])
-        return self
-
-    def set_target(self, target: str):
-        if target:
-            self._commands.extend(["--target", target])
-        return self
-
-    def set_parallel_jobs(self, njobs):
-        if njobs:
-            self._commands.extend(["-j", njobs])
-        return self
+    def get_command(self):
+        return self._command

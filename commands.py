@@ -39,10 +39,13 @@ class OutputPanel:
         self.panel.settings().update(settings)
         self.panel.set_read_only(False)
 
-    def show(self) -> None:
+    def show(self, *, clear: bool = False) -> None:
         """show panel"""
         # ensure panel is created
         self.create_panel()
+
+        if clear:
+            self.clear()
 
         self.window.run_command("show_panel", {"panel": f"output.{self.panel_name}"})
 
@@ -59,12 +62,6 @@ class OutputPanel:
 
         self.panel.run_command("insert", {"characters": s})
         return len(s)
-
-
-def show_empty_panel(panel: OutputPanel):
-    """show empty output panel"""
-    panel.show()
-    panel.clear()
 
 
 def get_workspace_path(view: sublime.View) -> Path:
@@ -116,25 +113,25 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
 
     def configure(self, source_path: Path):
         with sublime_settings.Settings() as settings:
-            cmake_path = settings.get("cmake") or "cmake"
             generator = settings.get("generator")
             build_prefix = settings.get("build_prefix") or "build"
             envs = settings.get("envs")
 
-            user_setting_variables = {
+            user_cache_entries = {
                 k: v for k, v in settings.to_dict().items() if k.startswith("CMAKE_")
             }
 
             build_path = source_path.joinpath(build_prefix)
-            cache_variables = self.omit_empty(user_setting_variables)
+            cache_entries = self.omit_empty(user_cache_entries)
 
-        params = cmake_commands.CMakeConfigureCommand(
-            cmake_path, source_path, build_path
+        command = cmake_commands.CMakeCommands.configure(
+            source_path, build_path, cache_entry=cache_entries, generator=generator
         )
-        params.set_generator(generator).set_cmake_variables(cache_variables)
 
-        show_empty_panel(OUTPUT_PANEL)
-        ret = cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        OUTPUT_PANEL.show(clear=True)
+        ret = cmake_commands.exec_subprocess(
+            command, OUTPUT_PANEL, env=envs, cwd=source_path
+        )
         print(f"process terminated with exit code {ret}")
 
     def is_enabled(self):
@@ -143,8 +140,6 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
 
 class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
     """"""
-
-    build_event = threading.Event()
 
     def run(self, target: str = ""):
         try:
@@ -163,22 +158,19 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         self.save_all_buffer(self.window)
 
         with sublime_settings.Settings() as settings:
-            cmake_path = settings.get("cmake") or "cmake"
             build_prefix = settings.get("build_prefix") or "build"
-            config = settings.get("CMAKE_BUILD_TYPE")
-            njobs = settings.get("jobs") or 4
-            envs = settings.get("envs")
-
             build_path = source_path.joinpath(build_prefix)
 
-        params = cmake_commands.CMakeBuildCommand(cmake_path, build_path)
-        params.set_config(config).set_target(target).set_parallel_jobs(njobs)
+            njobs = settings.get("jobs") or -1
+            envs = settings.get("envs")
 
-        show_empty_panel(OUTPUT_PANEL)
-        ret = cmake_commands.exec_childprocess(params.command(), OUTPUT_PANEL, env=envs)
+        command = cmake_commands.CMakeCommands.build(build_path, njobs=njobs)
+
+        OUTPUT_PANEL.show()
+        ret = cmake_commands.exec_subprocess(
+            command, OUTPUT_PANEL, cwd=build_path, env=envs
+        )
         print(f"process terminated with exit code {ret}")
-
-        self.build_event.set()
 
     def save_all_buffer(self, window: sublime.Window):
         unsaved_views = [view for view in window.views() if view.is_dirty()]
@@ -186,10 +178,8 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
             return
 
         message = f"{len(unsaved_views)} unsaved document(s).\n\nSave all?"
-        save_all = sublime.ok_cancel_dialog(message, title="Build Warning !")
-        if save_all:
-            for view in unsaved_views:
-                view.run_command("save", {"async": False})
+        if sublime.ok_cancel_dialog(message, title="Build Warning !"):
+            window.run_command("save_all")
 
     def is_enabled(self):
         return valid_build_source(self.window.active_view())
@@ -198,7 +188,7 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
     """"""
 
-    def run(self, config: str = "", target: str = "test"):
+    def run(self):
         try:
             source_path = get_workspace_path(self.window.active_view())
         except Exception as err:
@@ -207,32 +197,21 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
 
         thread = threading.Thread(
             target=self.test,
-            args=(source_path, config, target),
+            args=(source_path,),
         )
         thread.start()
 
-    def test(self, source_path: Path, config: str = "", target: str = ""):
-        # build project before run 'ctest'
-        CmaketoolsBuildCommand.build_event.clear()
-        self.window.run_command("cmaketools_build")
-        CmaketoolsBuildCommand.build_event.wait()
+    def test(self, source_path: Path):
 
         with sublime_settings.Settings() as settings:
-            ctest_path = settings.get("ctest") or "ctest"
             build_prefix = settings.get("build_prefix") or "build"
-            njobs = settings.get("jobs") or 4
-
             build_path = source_path.joinpath(build_prefix)
+            njobs = settings.get("jobs") or -1
 
-        params = cmake_commands.CTestCommand(ctest_path, build_path)
-        params.set_config(config).set_target(target).set_parallel_jobs(njobs)
-
-        print(params.command())
+        command = cmake_commands.CTestCommand(build_path, njobs=njobs)
 
         OUTPUT_PANEL.show()
-        ret = cmake_commands.exec_childprocess(
-            params.command(), OUTPUT_PANEL, cwd=build_path
-        )
+        ret = cmake_commands.exec_subprocess(command, OUTPUT_PANEL, cwd=build_path)
         print(f"process terminated with exit code {ret}")
 
     def is_enabled(self):
