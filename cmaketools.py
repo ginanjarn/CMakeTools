@@ -1,10 +1,9 @@
 """cmake tools"""
 
-import json
 import threading
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List
 
 import sublime
 import sublime_plugin
@@ -30,13 +29,8 @@ def get_workspace_path(view: sublime.View) -> str:
 
 class HelpItemManager:
     def __init__(self):
-        self.cached_helps: Dict[str, cmake_help.CMakeHelpItem] = {}
-        self.cached_completions: List[sublime.CompletionItem] = []
+        self.help_cache = cmake_help.HelpCache()
 
-        self._cache_loaded = False
-        self._load_cache_lock = threading.Lock()
-
-    cache_path = Path(__file__).parent.joinpath("var", "cmake_helps.json")
     type_map = {
         "command": sublime.KIND_FUNCTION,
         "variable": sublime.KIND_VARIABLE,
@@ -44,99 +38,68 @@ class HelpItemManager:
         "module": sublime.KIND_NAMESPACE,
     }
 
-    def load_cache(self):
-        with self._load_cache_lock:
-            # call load_cache once only
-            self._cache_loaded = True
+    def get_help(self, name: str) -> str:
+        if item := self.help_cache.get_help_item(name):
+            doc = self.help_cache.get_cmake_documentation(item.name, item.kind)
+            if doc:
+                return f"<pre>{doc}</pre>"
 
-            try:
-                self.load_cache_file()
+        return ""
 
-            except Exception:
-                # build cache if failed load cache file
-                self.build_cache_file()
-
-    def load_cache_file(self):
-        jstr = self.cache_path.read_text()
-        data = json.loads(jstr)
-
-        for item in data:
-            self.cached_helps[item["name"]] = cmake_help.CMakeHelpItem(
-                item["type"], item["name"]
+    def get_completions(self) -> List[sublime.CompletionItem]:
+        def to_completion(item: cmake_help.HelpItem):
+            return sublime.CompletionItem(
+                trigger=item.name, kind=self.type_map[item.kind]
             )
 
-            if item["type"] == "command":
-                snippet = item["name"] + "($0)"
-            else:
-                snippet = item["name"].replace("<", "${1:").replace(">", "}") + "$0"
-
-            self.cached_completions.append(
-                sublime.CompletionItem.snippet_completion(
-                    trigger=item["name"],
-                    snippet=snippet,
-                    kind=self.type_map[item["type"]],
-                )
-            )
-
-    def build_cache_file(self):
-        cache_dir = self.cache_path.parent
-        if not cache_dir.is_dir():
-            cache_dir.mkdir(parents=True)
-
-        items = cmake_help.get_helps()
-        data = [asdict(item) for item in items]
-        jstr = json.dumps(data, indent=2)
-        self.cache_path.write_text(jstr)
-
-    def get_help(self, name: str) -> Optional[cmake_help.CMakeHelpItem]:
-        if not self._cache_loaded:
-            self.load_cache()
-
-        if item := self.cached_helps.get(name):
-            return cmake_help.get_docstring(item)
-
-    def get_completions(self):
-        if not self._cache_loaded:
-            self.load_cache()
-
-        return self.cached_completions()
+        return [to_completion(item) for item in self.help_cache.get_help_item_list()]
 
 
-class ViewEventListener(sublime_plugin.ViewEventListener):
+class ViewEventListener(sublime_plugin.EventListener):
     """"""
 
-    def __init__(self, view: sublime.View):
-        super().__init__(view)
+    def __init__(self):
         self.help_manager = HelpItemManager()
+        self.cached_completions = []
 
-    def on_hover(self, point: int, hover_zone: HoverZone):
+    def on_hover(self, view: sublime.View, point: int, hover_zone: HoverZone):
         # check point in valid source
-        if not (valid_context(self.view, point) and hover_zone == sublime.HOVER_TEXT):
+        if not (valid_context(view, point) and hover_zone == sublime.HOVER_TEXT):
             return
 
-        thread = threading.Thread(target=self._request_help, args=(point,))
+        thread = threading.Thread(target=self._request_help, args=(view, point))
         thread.start()
 
-    def _request_help(self, point):
-        name = self.view.substr(self.view.word(point))
+    def _request_help(self, view: sublime.View, point: int):
+        name = view.substr(view.word(point))
 
         if docstring := self.help_manager.get_help(name):
-            self.view.run_command("markdown_popup", {"text": docstring, "point": point})
+            view.run_command("markdown_popup", {"text": docstring, "point": point})
 
     def on_query_completions(
-        self, prefix: str, locations: List[int]
+        self, view: sublime.View, prefix: str, locations: List[int]
     ) -> sublime.CompletionList:
         point = locations[0]
 
         # check point in valid source
-        if not valid_context(self.view, point):
+        if not valid_context(view, point):
             return
 
-        if items := self.help_manager.cached_completions:
+        if items := self.cached_completions:
             return sublime.CompletionList(items)
 
-        thread = threading.Thread(target=self.help_manager.load_cache)
+        thread = threading.Thread(target=self._on_query_completions_task, args=(view,))
         thread.start()
+        view.run_command("hide_auto_complete")
+
+    def _on_query_completions_task(self, view: sublime.View):
+        self.cached_completions = self.help_manager.get_completions()
+        auto_complete_arguments = {
+            "disable_auto_insert": True,
+            "next_completion_if_showing": True,
+            "auto_complete_commit_on_tab": True,
+        }
+        view.run_command("auto_complete", auto_complete_arguments)
 
 
 @dataclass

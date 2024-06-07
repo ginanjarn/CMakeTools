@@ -1,11 +1,10 @@
-""""""
+"""CMake Help generator"""
 
-import html
 import os
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import List, Iterator
+from typing import List, Dict
 
 
 if os.name == "nt":
@@ -16,7 +15,7 @@ else:
     STARTUPINFO = None
 
 
-def get_childprocess(command: List[str]) -> str:
+def exec_subprocess(command: List[str]) -> str:
     process = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -25,49 +24,66 @@ def get_childprocess(command: List[str]) -> str:
         startupinfo=STARTUPINFO,
     )
     sout, serr = process.communicate()
-    if ret := process.returncode:
+    if process.returncode != 0:
         print(serr.strip().decode(), file=sys.stderr)
-        raise OSError(f"process terminated with exit code {ret}")
+        raise OSError(f"process terminated with exit code {process.returncode}")
     return sout.strip().decode()
 
 
-HelpType = str
-
-
 @dataclass
-class CMakeHelpItem:
-    type: HelpType
+class HelpItem:
     name: str
-
-    def get_docstring(self) -> str:
-        """return .rst formatted docstring"""
-        command = ["cmake", f"--help-{self.type}", self.name]
-        doc = get_childprocess(command)
-        return doc
+    kind: str
 
 
-def _get_helps(type: HelpType = "") -> Iterator[CMakeHelpItem]:
-    command = ["cmake", f"--help-{type}-list"]
-    result = get_childprocess(command)
-    yield from (CMakeHelpItem(type, item) for item in result.splitlines())
+class HelpCache:
+    def __init__(self):
+        self.help_items: Dict[str, HelpItem] = {}
 
+    def load_help_items(self):
+        self.help_items.update({item.name: item for item in self.command_list()})
+        self.help_items.update({item.name: item for item in self.command_list()})
+        self.help_items.update({item.name: item for item in self.variable_list()})
+        self.help_items.update({item.name: item for item in self.module_list()})
 
-HELP_TYPES = ["command", "variable", "property", "module"]
+    def get_help_item(self, name: str) -> HelpItem:
+        if not self.help_items:
+            self.load_help_items()
 
+        return self.help_items.get(name)
 
-def get_helps(type: HelpType = "") -> Iterator[CMakeHelpItem]:
-    """get available helps"""
+    def get_help_item_list(self, *, kind: str = "") -> List[HelpItem]:
+        if not self.help_items:
+            self.load_help_items()
 
-    if type in HELP_TYPES:
-        yield from _get_helps(type)
-        return
+        if kind:
+            return [item for _, item in self.help_items.items() if item.kind == kind]
 
-    for type in HELP_TYPES:
-        yield from _get_helps(type)
+        return [item for _, item in self.help_items.items()]
 
+    def get_cmake_help_list(self, kind: str) -> List[HelpItem]:
+        command = ["cmake", f"--help-{kind}-list"]
+        name_lines = exec_subprocess(command)
+        items = [HelpItem(name, kind) for name in name_lines.splitlines()]
+        return items
 
-def get_docstring(help: CMakeHelpItem) -> str:
-    """get docstring markdown compatible"""
+    def get_cmake_documentation(self, name: str, kind: str) -> str:
+        command = ["cmake", f"--help-{kind}", name]
+        documentation = exec_subprocess(command)
+        return documentation.replace("\r\n", "\n")
 
-    # due to incompatibility between '.rst' with markdown, wrap docstring with pre
-    return "<pre>" + html.escape(help.get_docstring()) + "</pre>"
+    def command_list(self) -> List[HelpItem]:
+        item_kind = "command"
+        return self.get_cmake_help_list(item_kind)
+
+    def variable_list(self) -> List[HelpItem]:
+        item_kind = "variable"
+        return self.get_cmake_help_list(item_kind)
+
+    def property_list(self) -> List[HelpItem]:
+        item_kind = "property"
+        return self.get_cmake_help_list(item_kind)
+
+    def module_list(self) -> List[HelpItem]:
+        item_kind = "module"
+        return self.get_cmake_help_list(item_kind)
