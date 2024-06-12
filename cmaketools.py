@@ -87,7 +87,10 @@ class ViewEventListener(sublime_plugin.EventListener):
         name = view.substr(view.word(point))
 
         if docstring := self.help_manager.get_help(name):
-            view.run_command("markdown_popup", {"text": docstring, "point": point})
+            view.run_command(
+                "marked_popup",
+                {"text": docstring, "location": point, "markup": "markdown"},
+            )
 
     def on_query_completions(
         self, view: sublime.View, prefix: str, locations: List[int]
