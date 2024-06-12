@@ -1,6 +1,7 @@
 """cmake commands"""
 
 import os
+import shlex
 import sys
 import subprocess
 from multiprocessing import cpu_count
@@ -48,8 +49,11 @@ def normalize_command(command: List[Any]) -> List[str]:
 def exec_subprocess(
     command: Command, output: StreamWriter, /, cwd: Path = None, env: dict = None
 ) -> ReturnCode:
+    commands = normalize_command(command.get_command())
+
+    print("exec:", shlex.join(commands))
     proc = subprocess.Popen(
-        normalize_command(command.get_command()),
+        normalize_command(commands),
         # stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,  # redirect to stdout
