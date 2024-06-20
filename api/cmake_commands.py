@@ -51,7 +51,7 @@ def exec_subprocess(
 ) -> ReturnCode:
     commands = normalize_command(command.get_command())
 
-    print("exec:", shlex.join(commands))
+    output.write(f"exec: {shlex.join(commands)}\n")
     proc = subprocess.Popen(
         normalize_command(commands),
         # stdin=subprocess.PIPE,
