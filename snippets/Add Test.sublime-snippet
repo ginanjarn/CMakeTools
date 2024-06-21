@@ -1,0 +1,9 @@
+<snippet>
+	<content><![CDATA[
+add_test(NAME ${1:<name>} COMMAND ${2:<command>})
+]]></content>
+	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
+	<tabTrigger>add_test</tabTrigger>
+	<!-- Optional: Set a scope to limit where the snippet will trigger -->
+	<scope>source.cmake</scope>
+</snippet>

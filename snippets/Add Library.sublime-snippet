@@ -1,0 +1,9 @@
+<snippet>
+	<content><![CDATA[
+add_library(${1:<name>} ${2:STATIC} ${3:<sources>...})
+]]></content>
+	<!-- Optional: Set a tabTrigger to define how to trigger the snippet -->
+	<tabTrigger>add_library</tabTrigger>
+	<!-- Optional: Set a scope to limit where the snippet will trigger -->
+	<scope>source.cmake</scope>
+</snippet>
