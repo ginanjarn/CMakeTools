@@ -145,7 +145,7 @@ class CMakeCommands(Command):
 
 class CTestCommand(Command):
     def __init__(self, build: Path, *, njobs: int = -1):
-        self._command = ["ctest", "--test-dir", str(build)]
+        self._command = ["ctest", "--test-dir", str(build), "--output-on-failure"]
 
         njobs = njobs if njobs > 0 else cpu_count()
         self._command.extend(["-j", njobs])
