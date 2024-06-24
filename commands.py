@@ -160,8 +160,11 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
             njobs = settings.get("jobs") or -1
             envs = settings.get("envs")
+            target = target or "all"
 
-        command = cmake_commands.CMakeCommands.build(build_path, njobs=njobs)
+        command = cmake_commands.CMakeCommands.build(
+            build_path, target=target, njobs=njobs
+        )
 
         OUTPUT_PANEL.show()
         ret = cmake_commands.exec_subprocess(
