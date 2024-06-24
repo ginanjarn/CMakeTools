@@ -64,7 +64,7 @@ def exec_subprocess(
         env=env,
     )
     while line := proc.stdout.readline():
-        output.write(line.strip().decode() + "\n")
+        output.write(line.rstrip().decode() + "\n")
 
     return proc.wait()
 
