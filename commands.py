@@ -138,7 +138,7 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
 class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
     """"""
 
-    def run(self, target: str = ""):
+    def run(self, target: str):
         try:
             source_path = get_workspace_path(self.window.active_view())
         except Exception as err:
@@ -151,8 +151,36 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         )
         thread.start()
 
-    def build(self, source_path: Path, target: str = ""):
+    def build(self, source_path: Path, target: str):
         self.save_all_buffer(self.window)
+
+        if not target:
+            # show_input_panel() run in Thread
+            input_event = threading.Event()
+
+            def on_done(input_target: str):
+                nonlocal target
+                target = input_target
+                input_event.set()  # done
+
+            def on_cancel():
+                input_event.set()  # done
+
+            default_target = "all"
+
+            self.window.show_input_panel(
+                "Target",
+                initial_text=default_target,
+                on_done=on_done,
+                on_change=None,
+                on_cancel=on_cancel,
+            )
+            # wait until done or canceled
+            input_event.wait()
+
+        # cancel if target not assigned
+        if not target:
+            return
 
         with sublime_settings.Settings() as settings:
             build_prefix = settings.get("build_prefix") or "build"
@@ -160,7 +188,6 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
 
             njobs = settings.get("jobs") or -1
             envs = settings.get("envs")
-            target = target or "all"
 
         command = cmake_commands.CMakeCommands.build(
             build_path, target=target, njobs=njobs

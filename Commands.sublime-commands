@@ -16,7 +16,19 @@
 		"command": "cmaketools_build"
 	},
 	{
-		"caption": "CMake: Build",
+		"args":
+		{
+			"target": "all"
+		},
+		"caption": "CMake: Build All Targets",
+		"command": "cmaketools_build"
+	},
+	{
+		"args":
+		{
+			"target": ""
+		},
+		"caption": "CMake: Build Specific Target...",
 		"command": "cmaketools_build"
 	},
 	{
@@ -28,7 +40,7 @@
 		"command": "show_panel"
 	},
 	{
-		"caption": "CMake: Test",
+		"caption": "CMake: Run Tests",
 		"command": "cmaketools_test"
 	},
 	{
