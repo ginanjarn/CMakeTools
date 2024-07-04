@@ -1,6 +1,9 @@
 import os
+import re
 import threading
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator, Optional
 
 import sublime
 import sublime_plugin
@@ -91,12 +94,12 @@ def show_workspace_error(error: Exception):
     sublime.error_message(message)
 
 
-class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
+class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
     """"""
 
-    def run(self):
+    def run(self, edit: sublime.Edit):
         try:
-            source_path = get_workspace_path(self.window.active_view())
+            source_path = get_workspace_path(self.view)
         except Exception as err:
             show_workspace_error(err)
             return
@@ -132,15 +135,15 @@ class CmaketoolsConfigureCommand(sublime_plugin.WindowCommand):
         print(f"process terminated with exit code {ret}")
 
     def is_enabled(self):
-        return valid_build_source(self.window.active_view())
+        return valid_build_source(self.view)
 
 
-class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
+class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
     """"""
 
-    def run(self, target: str):
+    def run(self, edit: sublime.Edit, target: str):
         try:
-            source_path = get_workspace_path(self.window.active_view())
+            source_path = get_workspace_path(self.view)
         except Exception as err:
             show_workspace_error(err)
             return
@@ -152,34 +155,12 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         thread.start()
 
     def build(self, source_path: Path, target: str):
-        self.save_all_buffer(self.window)
-
-        if not target:
-            # show_input_panel() run in Thread
-            input_event = threading.Event()
-
-            def on_done(input_target: str):
-                nonlocal target
-                target = input_target
-                input_event.set()  # done
-
-            def on_cancel():
-                input_event.set()  # done
-
-            default_target = "all"
-
-            self.window.show_input_panel(
-                "Target",
-                initial_text=default_target,
-                on_done=on_done,
-                on_change=None,
-                on_cancel=on_cancel,
-            )
-            # wait until done or canceled
-            input_event.wait()
-
         # cancel if target not assigned
         if not target:
+            return
+
+        window = self.view.window()
+        if not self.continue_unsaved_window(window):
             return
 
         with sublime_settings.Settings() as settings:
@@ -199,25 +180,35 @@ class CmaketoolsBuildCommand(sublime_plugin.WindowCommand):
         )
         print(f"process terminated with exit code {ret}")
 
-    def save_all_buffer(self, window: sublime.Window):
+    def continue_unsaved_window(self, window: sublime.Window) -> bool:
         unsaved_views = [view for view in window.views() if view.is_dirty()]
         if not unsaved_views:
-            return
+            return True
 
         message = f"{len(unsaved_views)} unsaved document(s).\n\nSave all?"
-        if sublime.ok_cancel_dialog(message, title="Build Warning !"):
+        result = sublime.yes_no_cancel_dialog(
+            message, title="Build Warning !", yes_title="Save All"
+        )
+
+        # cancel
+        if result == sublime.DialogResult.CANCEL:
+            return False
+
+        if result == sublime.DialogResult.YES:
             window.run_command("save_all")
 
+        return True
+
     def is_enabled(self):
-        return valid_build_source(self.window.active_view())
+        return valid_build_source(self.view)
 
 
-class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
+class CmaketoolsTestCommand(sublime_plugin.TextCommand):
     """"""
 
-    def run(self):
+    def run(self, edit: sublime.Edit):
         try:
-            source_path = get_workspace_path(self.window.active_view())
+            source_path = get_workspace_path(self.view)
         except Exception as err:
             show_workspace_error(err)
             return
@@ -242,7 +233,56 @@ class CmaketoolsTestCommand(sublime_plugin.WindowCommand):
         print(f"process terminated with exit code {ret}")
 
     def is_enabled(self):
-        return valid_build_source(self.window.active_view())
+        return valid_build_source(self.view)
+
+
+@dataclass
+class TargetMap:
+    lineno: int
+    target: str
+
+
+class CmakeBuildTargetOnFileCommand(sublime_plugin.TextCommand):
+    """"""
+
+    def run(self, edit: sublime.Edit, event: Optional[dict] = None):
+        source = self.view.substr(sublime.Region(0, self.view.size()))
+        target_maps = list(self.scan_target(source))
+
+        targets = ["all"] + [t.target for t in target_maps]
+        selected_index = 0
+
+        if event and len(targets) > 1:
+            row, _ = self.view.rowcol(event["text_point"])
+            try:
+                # set selected_index to hovered line
+                selected_index = [t.lineno for t in target_maps].index(row) + 1
+            except Exception:
+                pass
+
+        def on_select(index):
+            if index > -1:
+                self.view.run_command("cmaketools_build", {"target": targets[index]})
+
+        self.view.window().show_quick_panel(
+            targets, on_select=on_select, selected_index=selected_index
+        )
+
+    # cmake add target with 'add_library()' and 'add_executable()' command
+    pattern = re.compile(r"add_(?:library|executable)\s*\(\s*([\w\-:]+)\s")
+
+    def scan_target(self, text: str) -> Iterator[TargetMap]:
+        for lineno, line in enumerate(text.splitlines()):
+            if match := self.pattern.match(line.strip()):
+                yield TargetMap(lineno, match.group(1))
+
+    def is_visible(self) -> bool:
+        if self.view.is_dirty():
+            return False
+        return self.view.match_selector(0, "source.cmake")
+
+    def want_event(self) -> bool:
+        return True
 
 
 class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand):
