@@ -144,8 +144,11 @@ class CMakeCommands(Command):
 
 
 class CTestCommand(Command):
-    def __init__(self, build: Path, *, njobs: int = -1):
+    def __init__(self, build: Path, *, test_regex: str = "", njobs: int = -1):
         self._command = ["ctest", "--test-dir", str(build), "--output-on-failure"]
+
+        if test_regex:
+            self._command.extend(["-R", test_regex])
 
         njobs = njobs if njobs > 0 else cpu_count()
         self._command.extend(["-j", njobs])

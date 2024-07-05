@@ -4,4 +4,9 @@
         "caption": "Build Target...",
         "command": "cmake_build_target_on_file"
     },
+    {
+        "id": "cmaketools",
+        "caption": "Run Test...",
+        "command": "cmake_test_target_on_file"
+    },
 ]

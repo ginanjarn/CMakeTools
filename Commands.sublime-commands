@@ -36,8 +36,12 @@
 		"command": "show_panel"
 	},
 	{
-		"caption": "CMake: Run Tests",
+		"caption": "CMake: Run All Tests",
 		"command": "cmaketools_test"
+	},
+	{
+		"caption": "CMake: Run Test...",
+		"command": "cmake_test_target_on_file"
 	},
 	{
 		"caption": "CMake: Set Compiler Kits...",
