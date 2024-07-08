@@ -1,12 +1,30 @@
 [
     {
         "id": "cmaketools",
+        "caption": "-"
+    },
+    {
+        "id": "cmaketools",
         "caption": "Build Target...",
         "command": "cmake_build_target_on_file"
     },
     {
         "id": "cmaketools",
+        "caption": "Build This Target",
+        "command": "cmake_build_hovered_target"
+    },
+    {
+        "id": "cmaketools",
+        "caption": "-"
+    },
+    {
+        "id": "cmaketools",
         "caption": "Run Test...",
         "command": "cmake_test_target_on_file"
+    },
+    {
+        "id": "cmaketools",
+        "caption": "Run This Test",
+        "command": "cmake_test_hovered_target"
     },
 ]

@@ -247,41 +247,48 @@ class TargetMap:
 class CmakeBuildTargetOnFileCommand(sublime_plugin.TextCommand):
     """"""
 
-    def run(self, edit: sublime.Edit, event: Optional[dict] = None):
+    def run(self, edit: sublime.Edit):
         source = self.view.substr(sublime.Region(0, self.view.size()))
-        target_maps = list(self.scan_target(source))
-
-        targets = ["all"] + [t.target for t in target_maps]
-        selected_index = 0
-
-        if event and len(targets) > 1:
-            row, _ = self.view.rowcol(event["text_point"])
-            try:
-                # set selected_index to hovered line
-                selected_index = [t.lineno for t in target_maps].index(row) + 1
-            except Exception:
-                pass
+        targets = ["all"] + list(self.scan_target(source))
 
         def on_select(index):
             if index > -1:
                 self.view.run_command("cmaketools_build", {"target": targets[index]})
 
-        self.view.window().show_quick_panel(
-            targets, on_select=on_select, selected_index=selected_index
-        )
+        self.view.window().show_quick_panel(targets, on_select=on_select)
 
     # cmake add target with 'add_library()' and 'add_executable()' command
     pattern = re.compile(r"add_(?:library|executable)\s*\(\s*([\w\-:]+)\s")
 
-    def scan_target(self, text: str) -> Iterator[TargetMap]:
-        for lineno, line in enumerate(text.splitlines()):
+    def scan_target(self, text: str) -> Iterator[str]:
+        for line in text.splitlines():
             if match := self.pattern.match(line.strip()):
-                yield TargetMap(lineno, match.group(1))
+                yield match.group(1)
 
-    def is_visible(self) -> bool:
-        if self.view.is_dirty():
+    def is_visible(self, event: Optional[dict] = None) -> bool:
+        return (not self.view.is_dirty()) and self.view.match_selector(
+            0, "source.cmake"
+        )
+
+
+class CmakeBuildHoveredTargetCommand(sublime_plugin.TextCommand):
+    """"""
+
+    # cmake add target with 'add_library()' and 'add_executable()' command
+    pattern = re.compile(r"add_(?:library|executable)\s*\(\s*([\w\-:]+)\s")
+
+    def run(self, edit: sublime.Edit, event: dict):
+        line_text = self.view.substr(self.view.line(event["text_point"]))
+        if match := self.pattern.match(line_text.strip()):
+            self.view.run_command("cmaketools_build", {"target": match.group(1)})
+
+    def is_visible(self, event: dict) -> bool:
+        if self.view.is_dirty() or (not self.view.match_selector(0, "source.cmake")):
             return False
-        return self.view.match_selector(0, "source.cmake")
+
+        line_text = self.view.substr(self.view.line(event["text_point"]))
+        match = self.pattern.match(line_text.strip())
+        return bool(match)
 
     def want_event(self) -> bool:
         return True
@@ -290,41 +297,49 @@ class CmakeBuildTargetOnFileCommand(sublime_plugin.TextCommand):
 class CmakeTestTargetOnFileCommand(sublime_plugin.TextCommand):
     """"""
 
-    def run(self, edit: sublime.Edit, event: Optional[dict] = None):
+    def run(self, edit: sublime.Edit):
         source = self.view.substr(sublime.Region(0, self.view.size()))
-        target_maps = list(self.scan_target(source))
-
-        targets = ["all"] + [t.target for t in target_maps]
-        selected_index = 0
-
-        if event and len(targets) > 1:
-            row, _ = self.view.rowcol(event["text_point"])
-            try:
-                # set selected_index to hovered line
-                selected_index = [t.lineno for t in target_maps].index(row) + 1
-            except Exception:
-                pass
+        targets = ["all"] + list(self.scan_target(source))
 
         def on_select(index):
             if index > -1:
-                self.view.run_command("cmaketools_test", {"test_regex": targets[index]})
+                target = targets[index] if index > 0 else ""
+                self.view.run_command("cmaketools_test", {"test_regex": target})
 
-        self.view.window().show_quick_panel(
-            targets, on_select=on_select, selected_index=selected_index
-        )
+        self.view.window().show_quick_panel(targets, on_select=on_select)
 
     # cmake add target with 'add_test()' command
     pattern = re.compile(r"add_test\s*\(\s*\s*NAME\s+([\w\-:]+)\s")
 
-    def scan_target(self, text: str) -> Iterator[TargetMap]:
-        for lineno, line in enumerate(text.splitlines()):
+    def scan_target(self, text: str) -> Iterator[str]:
+        for line in text.splitlines():
             if match := self.pattern.match(line.strip()):
-                yield TargetMap(lineno, match.group(1))
+                yield match.group(1)
 
     def is_visible(self) -> bool:
-        if self.view.is_dirty():
+        return (not self.view.is_dirty()) and self.view.match_selector(
+            0, "source.cmake"
+        )
+
+
+class CmakeTestHoveredTargetCommand(sublime_plugin.TextCommand):
+    """"""
+
+    # cmake add target with 'add_test()' command
+    pattern = re.compile(r"add_test\s*\(\s*\s*NAME\s+([\w\-:]+)\s")
+
+    def run(self, edit: sublime.Edit, event: dict):
+        line_text = self.view.substr(self.view.line(event["text_point"]))
+        if match := self.pattern.match(line_text.strip()):
+            self.view.run_command("cmaketools_test", {"test_regex": match.group(1)})
+
+    def is_visible(self, event: dict) -> bool:
+        if self.view.is_dirty() or (not self.view.match_selector(0, "source.cmake")):
             return False
-        return self.view.match_selector(0, "source.cmake")
+
+        line_text = self.view.substr(self.view.line(event["text_point"]))
+        match = self.pattern.match(line_text.strip())
+        return bool(match)
 
     def want_event(self) -> bool:
         return True
