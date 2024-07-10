@@ -39,6 +39,15 @@ class OutputPanel:
         self.panel.settings().update(settings)
         self.panel.set_read_only(False)
 
+    def move_cursor(self, point: int = -1) -> None:
+        """move cursor
+        * move to the end if point < 0
+        """
+        point = self.panel.size() if point < 0 else point
+
+        self.panel.sel().clear()
+        self.panel.sel().add(point)
+
     def show(self, *, clear: bool = False) -> None:
         """show panel"""
         # ensure panel is created
@@ -59,6 +68,11 @@ class OutputPanel:
     def write(self, s: str) -> int:
         # ensure panel is created
         self.create_panel()
+        point = self.panel.size()
+        # move cursor to the end
+        self.move_cursor(point)
+
+        self.panel.show(point, keep_to_left=True)
 
         self.panel.run_command("insert", {"characters": s})
         return len(s)
