@@ -1,59 +1,121 @@
 """cmake tools"""
 
 import html
+import json
 import threading
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 
 import sublime
 import sublime_plugin
 from sublime import HoverZone
 
-from .api import cmake_help, formatter, diffutils
+from .internal.cmake_help import Name, NameType, HelpCLI
 
 
-def valid_context(view: sublime.View, point: int) -> bool:
+_TYPE_MAP = {
+    NameType.Command: (sublime.KindId.FUNCTION, "", ""),
+    NameType.Module: (sublime.KindId.NAMESPACE, "", ""),
+    NameType.Policy: (sublime.KindId.COLOR_ORANGISH, "v", ""),
+    NameType.Property: (sublime.KindId.VARIABLE, "", ""),
+    NameType.Variable: (sublime.KindId.VARIABLE, "", ""),
+}
+
+
+def nametype_to_kind(type: NameType) -> tuple:
+    return _TYPE_MAP[type]
+
+
+def is_valid_context(view: sublime.View, point: int) -> bool:
     return view.match_selector(point, "source.cmake")
 
 
-def get_workspace_path(view: sublime.View) -> str:
-    window = view.window()
-    file_name = view.file_name()
+class CMakeHelpCache:
+    """"""
 
-    if folders := [
-        folder for folder in window.folders() if file_name.startswith(folder)
-    ]:
-        return max(folders)
-    return str(Path(file_name).parent)
-
-
-class HelpItemManager:
     def __init__(self):
-        self.help_cache = cmake_help.HelpCache()
+        self.name_map: Dict[str, Name] = {}
+        self.help_cli = HelpCLI(".")
 
-    kind_map = {
-        "command": sublime.KIND_FUNCTION,
-        "variable": sublime.KIND_VARIABLE,
-        "property": sublime.KIND_VARIABLE,
-        "module": sublime.KIND_NAMESPACE,
-    }
+        self.is_cache_loaded = False
+
+    cache_path = Path().home().joinpath(".CMakeTools/help_cache.json")
+
+    def load_cache(self):
+        self.is_cache_loaded = True
+        try:
+            text = self.cache_path.read_text()
+            data = json.loads(text)
+            name_map = {item["name"]: Name(**item) for item in data["items"]}
+            self.name_map = name_map
+
+        except Exception:
+            cmake_names = self._fetch_names()
+            self._write_cache(cmake_names)
+            self.name_map = {cmake_name.name: cmake_name for cmake_name in cmake_names}
+
+    def _fetch_names(self) -> List[Name]:
+        return list(self.help_cli.get_name_list())
+
+    def _write_cache(self, name_list: List[Name]):
+        # create parent directory if not exists
+        parent = self.cache_path.parent
+        parent.mkdir(parents=True, exist_ok=True)
+
+        def to_dict(name: Name):
+            return {"name": name.name, "type": name.type.value}
+
+        data = {"items": [to_dict(name) for name in name_list]}
+        json_str = json.dumps(data, indent=2)
+        self.cache_path.write_text(json_str)
+
+    def get_completions(self) -> List[Name]:
+        """"""
+        if not self.is_cache_loaded:
+            self.load_cache()
+
+        result = self.help_cli.get_name_list()
+        return result
+
+    def get_documentation(self, name: str) -> str:
+        """"""
+        if not self.is_cache_loaded:
+            self.load_cache()
+
+        if cmake_name := self.name_map.get(name):
+            return self.help_cli.get_documentation(cmake_name)
+        return ""
+
+
+class CMakeHelpManager:
+    def __init__(self):
+        self.help_cache = CMakeHelpCache()
+        self.completion_cache = None
 
     def get_help(self, name: str) -> str:
-        if item := self.help_cache.get_help_item(name):
-            doc = self.help_cache.get_cmake_documentation(item.name, item.kind)
-            if doc:
-                return f"<pre>{html.escape(doc)}</pre>"
+        """"""
+        if doc := self.help_cache.get_documentation(name):
+            return f"<pre>{html.escape(doc)}</pre>"
 
         return ""
 
-    def get_completions(self) -> List[sublime.CompletionItem]:
-        def to_completion(item: cmake_help.HelpItem):
-            if item.kind == "command":
+    def get_completion(self) -> List[sublime.CompletionItem]:
+        if cache := self.completion_cache:
+            return cache
+
+        temp = self._get_completion()
+        self.completion_cache = temp
+        return temp
+
+    def _get_completion(self) -> List[sublime.CompletionItem]:
+        """"""
+
+        def to_completion(item: Name):
+            if item.type == NameType.Command:
                 params = "" if item.name.startswith("end") else "$0"
                 snippet = f"{item.name}({params})"
 
-            elif item.kind in {"variable", "property"}:
+            elif item.type in {NameType.Variable, NameType.Property}:
                 snippet = item.name.replace("<", "${1:").replace(">", "}")
 
             else:
@@ -61,29 +123,29 @@ class HelpItemManager:
 
             return sublime.CompletionItem.snippet_completion(
                 trigger=item.name,
-                kind=self.kind_map[item.kind],
+                kind=nametype_to_kind(item.type),
                 snippet=snippet,
             )
 
-        return [to_completion(item) for item in self.help_cache.get_help_item_list()]
+        return [to_completion(item) for item in self.help_cache.get_completions()]
 
 
 class ViewEventListener(sublime_plugin.EventListener):
     """"""
 
     def __init__(self):
-        self.help_manager = HelpItemManager()
+        self.help_manager = CMakeHelpManager()
         self.cached_completions = []
 
     def on_hover(self, view: sublime.View, point: int, hover_zone: HoverZone):
         # check point in valid source
-        if not (valid_context(view, point) and hover_zone == sublime.HOVER_TEXT):
+        if not (is_valid_context(view, point) and hover_zone == sublime.HOVER_TEXT):
             return
 
-        thread = threading.Thread(target=self._request_help, args=(view, point))
+        thread = threading.Thread(target=self._on_hover_task, args=(view, point))
         thread.start()
 
-    def _request_help(self, view: sublime.View, point: int):
+    def _on_hover_task(self, view: sublime.View, point: int):
         name = view.substr(view.word(point))
 
         if docstring := self.help_manager.get_help(name):
@@ -98,7 +160,7 @@ class ViewEventListener(sublime_plugin.EventListener):
         point = locations[0]
 
         # check point in valid source
-        if not valid_context(view, point):
+        if not is_valid_context(view, point):
             return
 
         if items := self.cached_completions:
@@ -109,98 +171,10 @@ class ViewEventListener(sublime_plugin.EventListener):
         view.run_command("hide_auto_complete")
 
     def _on_query_completions_task(self, view: sublime.View):
-        self.cached_completions = self.help_manager.get_completions()
+        self.cached_completions = self.help_manager.get_completion()
         auto_complete_arguments = {
             "disable_auto_insert": True,
             "next_completion_if_showing": True,
             "auto_complete_commit_on_tab": True,
         }
         view.run_command("auto_complete", auto_complete_arguments)
-
-
-@dataclass
-class TextChange:
-    region: sublime.Region
-    new_text: str
-    cursor_move: int = 0
-
-    def moved_region(self, move: int) -> sublime.Region:
-        return sublime.Region(self.region.a + move, self.region.b + move)
-
-
-MULTIDOCUMENT_CHANGE_LOCK = threading.Lock()
-
-
-class CmaketoolsApplyTextChangesCommand(sublime_plugin.TextCommand):
-    def run(self, edit: sublime.Edit, changes: List[dict]):
-        text_changes = [self.to_text_change(c) for c in changes]
-        current_sel = list(self.view.sel())
-
-        with MULTIDOCUMENT_CHANGE_LOCK:
-            self.apply(edit, text_changes)
-            self.relocate_selection(current_sel, text_changes)
-            self.view.show(self.view.sel(), show_surrounds=False)
-
-    def to_text_change(self, change: dict) -> TextChange:
-        start = change["range"]["start"]
-        end = change["range"]["end"]
-
-        start_point = self.view.text_point(start["line"], start["character"])
-        end_point = self.view.text_point(end["line"], end["character"])
-
-        region = sublime.Region(start_point, end_point)
-        new_text = change["newText"]
-        cursor_move = len(new_text) - region.size()
-
-        return TextChange(region, new_text, cursor_move)
-
-    def apply(self, edit: sublime.Edit, text_changes: List[TextChange]):
-        cursor_move = 0
-        for change in text_changes:
-            replaced_region = change.moved_region(cursor_move)
-            self.view.erase(edit, replaced_region)
-            self.view.insert(edit, replaced_region.a, change.new_text)
-            cursor_move += change.cursor_move
-
-    def relocate_selection(
-        self, selections: List[sublime.Region], changes: List[TextChange]
-    ):
-        """relocate current selection following text changes"""
-        moved_selections = []
-        for selection in selections:
-            temp_selection = selection
-            for change in changes:
-                if temp_selection.begin() > change.region.begin():
-                    temp_selection.a += change.cursor_move
-                    temp_selection.b += change.cursor_move
-
-            moved_selections.append(temp_selection)
-
-        # we must clear current selection
-        self.view.sel().clear()
-        self.view.sel().add_all(moved_selections)
-
-
-class CmaketoolsDocumentFormattingCommand(sublime_plugin.TextCommand):
-    def run(self, edit: sublime.Edit):
-        if not self.view.match_selector(0, "source.cmake"):
-            print("Only format CMake files")
-            return
-
-        text = self.view.substr(sublime.Region(0, self.view.size()))
-        formatted = self.format_source(text)
-
-        self.apply_change(edit, text, formatted)
-
-    def format_source(self, text: str) -> str:
-        fmt = formatter.CMakeFormatter(text)
-        return fmt.format_source()
-
-    def apply_change(self, edit: sublime.Edit, origin: str, formatted: str, /):
-        changes = diffutils.get_text_changes(origin, formatted)
-        self.view.run_command(
-            "cmaketools_apply_text_changes", args={"changes": changes}
-        )
-
-    def is_enabled(self) -> bool:
-        return self.view and self.view.match_selector(0, "source.cmake")
