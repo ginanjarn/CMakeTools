@@ -74,8 +74,7 @@ class CMakeHelpCache:
         if not self.is_cache_loaded:
             self.load_cache()
 
-        result = self.help_cli.get_name_list()
-        return result
+        return [name for _, name in self.name_map.items()]
 
     def get_documentation(self, name: str) -> str:
         """"""
