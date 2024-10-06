@@ -12,7 +12,7 @@
 		{
 			"target": "clean"
 		},
-		"caption": "CMake: Clean Build",
+		"caption": "CMake: Clean",
 		"command": "cmaketools_build"
 	},
 	{
@@ -20,11 +20,11 @@
 		{
 			"target": "all"
 		},
-		"caption": "CMake: Build All Targets",
+		"caption": "CMake: Build Targets (All)",
 		"command": "cmaketools_build"
 	},
 	{
-		"caption": "CMake: Build Target...",
+		"caption": "CMake: Build Selected Target...",
         "command": "cmake_build_target_on_file"
 	},
 	{
@@ -36,11 +36,11 @@
 		"command": "show_panel"
 	},
 	{
-		"caption": "CMake: Run All Tests",
+		"caption": "CMake: Run Tests (All)",
 		"command": "cmaketools_test"
 	},
 	{
-		"caption": "CMake: Run Test...",
+		"caption": "CMake: Run Selected Test...",
 		"command": "cmake_test_target_on_file"
 	},
 	{
