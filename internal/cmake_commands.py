@@ -18,7 +18,6 @@ class ConfigureParams:
 @dataclass
 class BuildParams:
     target: str = "all"
-    preset: Path = None
 
 
 @dataclass
@@ -76,9 +75,6 @@ class Project:
 
         if target := params.target:
             command.extend(["--target", target])
-
-        if preset := params.preset:
-            command.extend(["--preset", preset])
 
         if arguments:
             command += shlex.split(arguments)
