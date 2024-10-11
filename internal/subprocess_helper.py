@@ -41,7 +41,8 @@ def exec_subprocess(
         stdout = subprocess.PIPE
 
     if captures == CaptureOption.STDERR:
-        stderr = subprocess.PIPE
+        # redirect stderr to stdout
+        stderr = subprocess.STDOUT
 
     if captures == CaptureOption.ALL:
         stdout = subprocess.PIPE
