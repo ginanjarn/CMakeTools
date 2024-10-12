@@ -233,7 +233,7 @@ class TargetMap:
     target: str
 
 
-class CmakeBuildTargetOnFileCommand(sublime_plugin.TextCommand):
+class CmakeBuildTargetInFileCommand(sublime_plugin.TextCommand):
     """"""
 
     def run(self, edit: sublime.Edit):
@@ -243,6 +243,11 @@ class CmakeBuildTargetOnFileCommand(sublime_plugin.TextCommand):
         def on_select(index):
             if index > -1:
                 self.view.run_command("cmaketools_build", {"target": targets[index]})
+
+        # select the target if only one found
+        if len(targets) == 2:
+            on_select(index=1)
+            return
 
         self.view.window().show_quick_panel(targets, on_select=on_select)
 
@@ -283,7 +288,7 @@ class CmakeBuildHoveredTargetCommand(sublime_plugin.TextCommand):
         return True
 
 
-class CmakeTestTargetOnFileCommand(sublime_plugin.TextCommand):
+class CmakeTestTargetInFileCommand(sublime_plugin.TextCommand):
     """"""
 
     def run(self, edit: sublime.Edit):
@@ -294,6 +299,11 @@ class CmakeTestTargetOnFileCommand(sublime_plugin.TextCommand):
             if index > -1:
                 target = targets[index] if index > 0 else ""
                 self.view.run_command("cmaketools_test", {"test_regex": target})
+
+        # select the target if only one found
+        if len(targets) == 2:
+            on_select(index=1)
+            return
 
         self.view.window().show_quick_panel(targets, on_select=on_select)
 

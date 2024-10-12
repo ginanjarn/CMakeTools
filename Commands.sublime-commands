@@ -20,12 +20,12 @@
 		{
 			"target": "all"
 		},
-		"caption": "CMake: Build Targets (All)",
+		"caption": "CMake: Build Targets (target='all')",
 		"command": "cmaketools_build"
 	},
 	{
-		"caption": "CMake: Build Selected Target...",
-        "command": "cmake_build_target_on_file"
+		"caption": "CMake: Build Target In File...",
+        "command": "cmake_build_target_in_file"
 	},
 	{
 		"args":
@@ -36,12 +36,12 @@
 		"command": "show_panel"
 	},
 	{
-		"caption": "CMake: Run Tests (All)",
+		"caption": "CMake: Run Tests (target='all')",
 		"command": "cmaketools_test"
 	},
 	{
-		"caption": "CMake: Run Selected Test...",
-		"command": "cmake_test_target_on_file"
+		"caption": "CMake: Run Test In File...",
+		"command": "cmake_test_target_in_file"
 	},
 	{
 		"caption": "CMake: Set Compiler Kits...",

@@ -1,7 +1,8 @@
 import shlex
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterator, List, Any
+from typing import Dict, List, Any
 
 from .subprocess_helper import exec_subprocess, StreamWriter, ReturnCode
 
@@ -9,20 +10,49 @@ from .subprocess_helper import exec_subprocess, StreamWriter, ReturnCode
 CMakeCacheEntry = Dict[str, Any]
 
 
+class Params(ABC):
+    """"""
+
+    @abstractmethod
+    def to_arguments(self) -> List[str]:
+        """"""
+
+
 @dataclass
-class ConfigureParams:
+class ConfigureParams(Params):
     generator: str = ""
     cache_entry: CMakeCacheEntry = None
 
+    def to_arguments(self) -> List[str]:
+        arguments = []
+        if self.generator:
+            arguments.append(f"-G{shlex.quote(self.generator)}")
+
+        if self.cache_entry:
+            for var, value in self.cache_entry.items():
+                arguments.append(f"-D{var}={shlex.quote(str(value))}")
+
+        return arguments
+
 
 @dataclass
-class BuildParams:
+class BuildParams(Params):
     target: str = "all"
 
+    def to_arguments(self) -> List[str]:
+        return ["--target", self.target]
+
 
 @dataclass
-class TestParams:
+class TestParams(Params):
     regex: str = ""
+
+    def to_arguments(self) -> List[str]:
+        arguments = []
+        if self.regex:
+            arguments.append(f"-R{self.regex}")
+
+        return arguments
 
 
 class Project:
@@ -59,11 +89,7 @@ class Project:
             f"-S{self.source_path.as_posix()}",
             f"-B{self.build_path.as_posix()}",
         ]
-        if entry := params.cache_entry:
-            command.extend(self._translate_cache_entry(entry))
-
-        if generator := params.generator:
-            command.append(f"-G{generator}")
+        command.extend(params.to_arguments())
 
         if arguments:
             command += shlex.split(arguments)
@@ -72,9 +98,7 @@ class Project:
 
     def _build(self, params: BuildParams, arguments: str = "") -> ReturnCode:
         command = ["cmake", "--build", self.build_path.as_posix()]
-
-        if target := params.target:
-            command.extend(["--target", target])
+        command.extend(params.to_arguments())
 
         if arguments:
             command += shlex.split(arguments)
@@ -88,18 +112,12 @@ class Project:
             self.build_path.as_posix(),
             "--output-on-failure",
         ]
-
-        if regex := params.regex:
-            command.append(f"-R{regex}")
+        command.extend(params.to_arguments())
 
         if arguments:
             command += shlex.split(arguments)
 
         return self.run_command(command)
-
-    def _translate_cache_entry(self, entry: CMakeCacheEntry) -> Iterator[str]:
-        for key, value in entry.items():
-            yield f"-D{key}={shlex.quote(str(value))}"
 
     def run_command(self, command: List["str"]) -> ReturnCode:
         self.output.write(f"exec: {shlex.join(command)}\n")
