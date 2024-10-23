@@ -237,8 +237,7 @@ class CmakeBuildTargetInFileCommand(sublime_plugin.TextCommand):
     """"""
 
     def run(self, edit: sublime.Edit):
-        source = self.view.substr(sublime.Region(0, self.view.size()))
-        targets = ["all"] + list(self.scan_target(source))
+        targets = ["all"] + list(self.scan_target())
 
         def on_select(index):
             if index > -1:
@@ -254,9 +253,14 @@ class CmakeBuildTargetInFileCommand(sublime_plugin.TextCommand):
     # cmake add target with 'add_library()' and 'add_executable()' command
     pattern = re.compile(r"add_(?:library|executable)\s*\(\s*([\w\-:]+)\s")
 
-    def scan_target(self, text: str) -> Iterator[str]:
-        for line in text.splitlines():
-            if match := self.pattern.match(line.strip()):
+    def scan_target(self) -> Iterator[str]:
+        for region in self.view.find_by_selector("entity.name.function"):
+            name = self.view.substr(region)
+            if name not in {"add_library", "add_executable"}:
+                continue
+
+            line_str = self.view.substr(self.view.line(region))
+            if match := self.pattern.match(line_str.lstrip()):
                 yield match.group(1)
 
     def is_visible(self, event: Optional[dict] = None) -> bool:
@@ -292,8 +296,7 @@ class CmakeTestTargetInFileCommand(sublime_plugin.TextCommand):
     """"""
 
     def run(self, edit: sublime.Edit):
-        source = self.view.substr(sublime.Region(0, self.view.size()))
-        targets = ["all"] + list(self.scan_target(source))
+        targets = ["all"] + list(self.scan_target())
 
         def on_select(index):
             if index > -1:
@@ -310,9 +313,14 @@ class CmakeTestTargetInFileCommand(sublime_plugin.TextCommand):
     # cmake add target with 'add_test()' command
     pattern = re.compile(r"add_test\s*\(\s*\s*NAME\s+([\w\-:]+)\s")
 
-    def scan_target(self, text: str) -> Iterator[str]:
-        for line in text.splitlines():
-            if match := self.pattern.match(line.strip()):
+    def scan_target(self) -> Iterator[str]:
+        for region in self.view.find_by_selector("entity.name.function"):
+            name = self.view.substr(region)
+            if name != "add_test":
+                continue
+
+            line_str = self.view.substr(self.view.line(region))
+            if match := self.pattern.match(line_str.lstrip()):
                 yield match.group(1)
 
     def is_visible(self) -> bool:
