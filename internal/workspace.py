@@ -10,16 +10,19 @@ def get_workspace_path(view: sublime.View) -> Path:
     Raise FileNotFoundError if not found.
     """
 
-    file_name = view.file_name()
+    file_name = Path(view.file_name())
     folders = [
-        folder for folder in view.window().folders() if file_name.startswith(folder)
+        folder
+        for folder in view.window().folders()
+        if str(file_name).startswith(folder)
     ]
 
     # sort form shortest path
     folders.sort()
     # set first folder contain 'CMakeLists.txt' as workspace path
     for folder in folders:
-        if (path := Path(folder).joinpath("CMakeLists.txt")) and path.is_file():
+        path = Path(folder, "CMakeLists.txt")
+        if path.is_file():
             return path.parent
 
     raise FileNotFoundError("unable find 'CMakeLists.txt'")

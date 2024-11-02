@@ -71,8 +71,8 @@ class Project:
         self.output = output
         self.environment = environment
 
-        self.source_path = self.path.joinpath(source_prefix)
-        self.build_path = self.path.joinpath(build_prefix)
+        self.source_path = Path(path, source_prefix).resolve()
+        self.build_path = Path(path, build_prefix).resolve()
 
     def configure(self, params: ConfigureParams, arguments: str = "") -> ReturnCode:
         return self._configure(params, arguments)
