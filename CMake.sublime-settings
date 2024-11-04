@@ -21,22 +21,12 @@
 	// Parallel jobs.
 	"jobs": 4,
 
-	// CMake cache entry.
-	// Build type: "Debug", "Release", "RelWithDebInfo", "MinSizeRel", etc
-	"CMAKE_BUILD_TYPE": "Debug",
-	// Generate "compile_commands.json"
-	"CMAKE_EXPORT_COMPILE_COMMANDS": true,
-	// The compiler path
-	"CMAKE_C_COMPILER": "",
-	"CMAKE_CXX_COMPILER": "",
-	// Prefix path included in "find_package()" command
-	"CMAKE_PREFIX_PATH": "",
-	// Prefix path where the target is installed
-	"CMAKE_INSTALL_PREFIX": "",
-	// Path to the toolchain file
-	"CMAKE_TOOLCHAIN_FILE": "",
-	// ...
-	// you can add more cmake variable entries
+	// CMake cache variables.
+	"cacheVariables":
+	{
+		"CMAKE_BUILD_TYPE": "Debug",
+		"CMAKE_EXPORT_COMPILE_COMMANDS": true,
+	},
 
 	// Environment variables.
 	// Variable must stored as mapping eg. {"key":value}.

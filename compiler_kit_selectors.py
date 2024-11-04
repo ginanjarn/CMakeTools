@@ -40,9 +40,17 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand):
             item = kit_items[index]
 
             with sublime_settings.Settings(save=True) as settings:
-                # cmake error on forward slash('\') separated path
-                settings.set("CMAKE_C_COMPILER", Path(item.c_compiler).as_posix())
-                settings.set("CMAKE_CXX_COMPILER", Path(item.cxx_compiler).as_posix())
+
+                cache_variables_key = "cacheVariables"
+                cache_variables = settings.get(cache_variables_key, {})
+                cache_variables.update(
+                    {
+                        # cmake error on forward slash('\') separated path
+                        "CMAKE_C_COMPILER": Path(item.c_compiler).as_posix(),
+                        "CMAKE_CXX_COMPILER": Path(item.cxx_compiler).as_posix(),
+                    }
+                )
+                settings.set(cache_variables_key, cache_variables)
 
                 # set generator if empty
                 if not settings.get("generator"):

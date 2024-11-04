@@ -117,15 +117,10 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
             generator = settings.get("generator")
             build_prefix = settings.get("build_prefix") or "build"
             envs = settings.get("envs")
-
-            user_cache_entries = {
-                k: v for k, v in settings.to_dict().items() if k.startswith("CMAKE_")
-            }
-
-            cache_entries = omit_empty(user_cache_entries)
+            cache_variables = settings.get("cacheVariables", {})
 
         OUTPUT_PANEL.show(clear=True)
-        params = cmake_commands.ConfigureParams(generator, cache_entries)
+        params = cmake_commands.ConfigureParams(generator, omit_empty(cache_variables))
         project = cmake_commands.Project(
             project_path, OUTPUT_PANEL, build_prefix=build_prefix, environment=envs
         )
