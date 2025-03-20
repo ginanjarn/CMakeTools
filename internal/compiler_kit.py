@@ -4,11 +4,12 @@ This module used to determine compiler path and cmake generator
 """
 
 import os
-import subprocess
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 from typing import Iterator, List
 
+from .subprocess_helper import exec_subprocess, CaptureOption
 from .triple import TargetTriple, TargetTripleParser
 
 PathStr = str
@@ -64,15 +65,26 @@ class CompilerKitScanner:
     def _get_paths(self, executable_name: str) -> List[PathStr]:
         find_cmd = "where" if os.name == "nt" else "which"
         command = [find_cmd, executable_name]
-        # Multiple executable may be detected.
-        return exec_subprocess(command).splitlines()
+
+        writer = StringIO()
+        return_code = exec_subprocess(command, writer, captures=CaptureOption.ALL)
+        if return_code != 0:
+            return []
+
+        # Multiple executable may be available in PATH
+        return writer.getvalue().splitlines()
 
     def _version_info(self, compiler_path: PathStr, version_switch: str) -> str:
         if not compiler_path:
             return ""
 
         command = [compiler_path, version_switch]
-        return exec_subprocess(command)
+
+        writer = StringIO()
+        return_code = exec_subprocess(command, writer, captures=CaptureOption.ALL)
+        if return_code != 0:
+            return ""
+        return writer.getvalue()
 
     def _get_triple(self, version_info: str) -> TargetTriple:
         return TargetTripleParser(version_info).parse()
@@ -101,30 +113,3 @@ def scan_compilers() -> List[CompilerKit]:
     """scan installed compilers"""
     scanner = CompilerKitScanner()
     return scanner.scan()
-
-
-if os.name == "nt":
-    # if on Windows, hide process window
-    STARTUPINFO = subprocess.STARTUPINFO()
-    STARTUPINFO.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-else:
-    STARTUPINFO = None
-
-
-def exec_subprocess(command: List[str]) -> str:
-    """get subprocess then return the output from stdout and stderr"""
-
-    proc = subprocess.Popen(
-        command,
-        # stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        shell=True,
-        startupinfo=STARTUPINFO,
-    )
-
-    sout, _ = proc.communicate()
-    if proc.returncode == 0:
-        return sout.decode()
-
-    return ""
