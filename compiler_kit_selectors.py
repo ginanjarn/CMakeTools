@@ -70,7 +70,7 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand):
             cmake_cache = source_path.joinpath(prefix, "CMakeCache.txt")
             os.remove(cmake_cache)
 
-        except FileNotFoundError:
+        except Exception:
             pass
 
 
