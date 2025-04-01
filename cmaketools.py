@@ -39,12 +39,15 @@ class CMakeHelpCache:
 
         self.is_cache_loaded = False
 
-    cache_path = Path().home().joinpath(".CMakeTools/help_cache.json")
+    def cache_path(self) -> Path:
+        cmake_version = self.help_cli.get_version()
+        cache_dir = Path(Path().home(), ".CMakeTools")
+        return Path(cache_dir, cmake_version, "cmake_names.json")
 
     def load_cache(self):
         self.is_cache_loaded = True
         try:
-            text = self.cache_path.read_text()
+            text = self.cache_path().read_text()
             data = json.loads(text)
             name_map = {item["name"]: Name(**item) for item in data["items"]}
             self.name_map = name_map
@@ -59,7 +62,7 @@ class CMakeHelpCache:
 
     def _write_cache(self, name_list: List[Name]):
         # create parent directory if not exists
-        parent = self.cache_path.parent
+        parent = self.cache_path().parent
         parent.mkdir(parents=True, exist_ok=True)
 
         def to_dict(name: Name):
@@ -67,7 +70,7 @@ class CMakeHelpCache:
 
         data = {"items": [to_dict(name) for name in name_list]}
         json_str = json.dumps(data, indent=2)
-        self.cache_path.write_text(json_str)
+        self.cache_path().write_text(json_str)
 
     def get_completions(self) -> List[Name]:
         """"""

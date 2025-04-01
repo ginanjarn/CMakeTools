@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 from io import StringIO
 from pathlib import Path
@@ -70,3 +71,18 @@ class HelpCLI:
             return ""
 
         return buffer.getvalue()
+
+    def get_version(self) -> str:
+        """"""
+        command = ["cmake", "--version"]
+
+        buffer = StringIO()
+        return_code = exec_subprocess(
+            command, buffer, captures=CaptureOption.STDOUT, cwd=self.project_path
+        )
+        if return_code != 0:
+            return ""
+
+        regex = r"[Vv]ersion ((?:\d+)\.(?:\d+)\.(?:\d+))"
+        match = re.search(regex, buffer.getvalue())
+        return match.group(1) if match else ""
