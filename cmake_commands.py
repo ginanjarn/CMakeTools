@@ -12,10 +12,6 @@ from .internal import sublime_settings
 from .internal.workspace import get_workspace_path
 
 
-def valid_source(view: sublime.View):
-    return view.match_selector(0, "source.cmake")
-
-
 class OutputPanel:
     """"""
 
@@ -347,11 +343,55 @@ class CmakeTestHoveredTargetCommand(sublime_plugin.TextCommand):
         return True
 
 
+class CmakeRunScriptCommand(sublime_plugin.TextCommand):
+    """"""
+
+    def run(self, edit: sublime.Edit):
+        if self.view.is_dirty():
+            message = (
+                f"{Path(self.view.file_name()).name!r} is unsaved.\n"
+                "\n"
+                "Save now and run?"
+            )
+            save_document = sublime.ok_cancel_dialog(
+                message, ok_title="Save", title="Document Unsaved!"
+            )
+            if not save_document:
+                # cancel run unsaved document
+                return
+
+            self.view.run_command("save")
+
+        try:
+            project_path = get_workspace_path(self.view)
+        except Exception as err:
+            show_workspace_error(err)
+            return
+
+        thread = threading.Thread(
+            target=self.run_script,
+            args=(project_path, self.view.file_name()),
+        )
+        thread.start()
+
+    def run_script(self, project_path: Path, file_path: str):
+        with sublime_settings.Settings() as settings:
+            envs = settings.get("envs")
+
+        OUTPUT_PANEL.show()
+        params = cmake_commands.ScriptParams(file_path)
+        project = cmake_commands.Project(project_path, OUTPUT_PANEL, environment=envs)
+        project.run_script(params)
+
+    def is_visible(self) -> bool:
+        return Path(self.view.file_name()).suffix == ".cmake"
+
+
 class CmaketoolsSaveEventListener(sublime_plugin.EventListener):
     """"""
 
     def on_post_save_async(self, view: sublime.View):
-        if not valid_source(view):
+        if Path(view.file_name()).name != "CMakeLists.txt":
             return
 
         with sublime_settings.Settings() as settings:

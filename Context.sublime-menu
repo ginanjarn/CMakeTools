@@ -27,4 +27,13 @@
         "caption": "Run This Test",
         "command": "cmake_test_hovered_target"
     },
+    {
+        "id": "cmaketools",
+        "caption": "-"
+    },
+    {
+        "id": "cmaketools",
+        "caption": "Run Script",
+        "command": "cmake_run_script"
+    },
 ]

@@ -44,6 +44,10 @@
 		"command": "cmake_test_target_in_file"
 	},
 	{
+		"caption": "CMake: Run Script",
+		"command": "cmake_run_script"
+	},
+	{
 		"caption": "CMake: Set Compiler Kits...",
 		"command": "cmaketools_set_kits"
 	},

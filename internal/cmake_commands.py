@@ -55,6 +55,15 @@ class TestParams(Params):
         return arguments
 
 
+@dataclass
+class ScriptParams(Params):
+    path: Path
+
+    def to_arguments(self) -> List[str]:
+        arguments = ["-P", str(self.path)]
+        return arguments
+
+
 class Project:
     """"""
 
@@ -82,6 +91,9 @@ class Project:
 
     def test(self, params: TestParams, arguments: str = "") -> ReturnCode:
         return self._test(params, arguments)
+
+    def run_script(self, params: ScriptParams, arguments: str = "") -> ReturnCode:
+        return self._run_script(params, arguments)
 
     def _configure(self, params: ConfigureParams, arguments: str = "") -> ReturnCode:
         command = [
@@ -111,6 +123,17 @@ class Project:
             "--test-dir",
             self.build_path.as_posix(),
             "--output-on-failure",
+        ]
+        command.extend(params.to_arguments())
+
+        if arguments:
+            command += shlex.split(arguments)
+
+        return self.run_command(command)
+
+    def _run_script(self, params: ScriptParams, arguments: str = "") -> ReturnCode:
+        command = [
+            "cmake",
         ]
         command.extend(params.to_arguments())
 
