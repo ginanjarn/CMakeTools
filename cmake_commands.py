@@ -360,13 +360,18 @@ class CmakeRunScriptCommand(sublime_plugin.TextCommand):
         project.run_script(params)
 
     def is_visible(self) -> bool:
-        return Path(self.view.file_name()).suffix == ".cmake"
+        if file_name := self.view.file_name():
+            return Path(file_name).suffix == ".cmake"
+        return False
 
 
 class CmaketoolsSaveEventListener(sublime_plugin.EventListener):
     """"""
 
     def on_post_save_async(self, view: sublime.View):
+        if not view.match_selector(0, "source.cmake"):
+            return
+
         if Path(view.file_name()).name != "CMakeLists.txt":
             return
 
