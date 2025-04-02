@@ -95,6 +95,13 @@ def omit_empty(mapping: dict) -> dict:
     return {k: v for k, v in mapping.items() if v}
 
 
+def is_cmakepresets_exists(project_path: Path) -> bool:
+    return (
+        Path(project_path, "CMakePresets.json").is_file()
+        or Path(project_path, "CMakeUserPresets.json").is_file()
+    )
+
+
 class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
     """"""
 
@@ -114,11 +121,23 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
             build_prefix = settings.get("build_prefix") or "build"
             envs = settings.get("envs")
             cache_variables = settings.get("cacheVariables", {})
+            preset = settings.get("preset") or "default"
+
+        use_presets = is_cmakepresets_exists(project_path)
+        if use_presets:
+            params = cmake_commands.PresetParams(preset)
+        else:
+            params = cmake_commands.ConfigureParams(
+                generator, omit_empty(cache_variables)
+            )
 
         OUTPUT_PANEL.show(clear=True)
-        params = cmake_commands.ConfigureParams(generator, omit_empty(cache_variables))
         project = cmake_commands.Project(
-            project_path, OUTPUT_PANEL, build_prefix=build_prefix, environment=envs
+            project_path,
+            OUTPUT_PANEL,
+            build_prefix=build_prefix,
+            environment=envs,
+            use_presets=use_presets,
         )
         project.configure(params)
 
@@ -154,11 +173,21 @@ class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
         with sublime_settings.Settings() as settings:
             build_prefix = settings.get("build_prefix") or "build"
             envs = settings.get("envs")
+            preset = settings.get("preset") or "default"
+
+        use_presets = is_cmakepresets_exists(project_path)
+        if use_presets:
+            params = cmake_commands.PresetParams(preset)
+        else:
+            params = cmake_commands.BuildParams(target)
 
         OUTPUT_PANEL.show()
-        params = cmake_commands.BuildParams(target)
         project = cmake_commands.Project(
-            project_path, OUTPUT_PANEL, build_prefix=build_prefix, environment=envs
+            project_path,
+            OUTPUT_PANEL,
+            build_prefix=build_prefix,
+            environment=envs,
+            use_presets=use_presets,
         )
         project.build(params, "--")
 
@@ -206,11 +235,21 @@ class CmaketoolsTestCommand(sublime_plugin.TextCommand):
         with sublime_settings.Settings() as settings:
             build_prefix = settings.get("build_prefix") or "build"
             envs = settings.get("envs")
+            preset = settings.get("preset") or "default"
+
+        use_presets = is_cmakepresets_exists(project_path)
+        if use_presets:
+            params = cmake_commands.PresetParams(preset)
+        else:
+            params = cmake_commands.TestParams(test_regex)
 
         OUTPUT_PANEL.show()
-        params = cmake_commands.TestParams(test_regex)
         project = cmake_commands.Project(
-            project_path, OUTPUT_PANEL, build_prefix=build_prefix, environment=envs
+            project_path,
+            OUTPUT_PANEL,
+            build_prefix=build_prefix,
+            environment=envs,
+            use_presets=use_presets,
         )
         project.test(params)
 

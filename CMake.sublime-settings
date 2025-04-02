@@ -30,5 +30,9 @@
 
 	// Environment variables.
 	// Variable must stored as mapping eg. {"key":value}.
-	"envs": null
+	"envs": null,
+
+	// CMake preset target.
+	// The preset name must defined in CMakePresets.json or CMakeUserPresets.json
+	"preset": "default",
 }
