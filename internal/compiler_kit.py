@@ -4,6 +4,7 @@ This module used to determine compiler path and cmake generator
 """
 
 import os
+import shutil
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
@@ -62,17 +63,8 @@ class CompilerKitScanner:
 
             yield CompilerKit(c_compiler, cc_path, cxx_path, generator)
 
-    def _get_paths(self, executable_name: str) -> List[PathStr]:
-        find_cmd = "where" if os.name == "nt" else "which"
-        command = [find_cmd, executable_name]
-
-        writer = StringIO()
-        return_code = exec_subprocess(command, writer, captures=CaptureOption.ALL)
-        if return_code != 0:
-            return []
-
-        # Multiple executable may be available in PATH
-        return writer.getvalue().splitlines()
+    def _get_paths(self, executable_name: str) -> PathStr:
+        return shutil.which(executable_name, mode=os.X_OK)
 
     def _version_info(self, compiler_path: PathStr, version_switch: str) -> str:
         if not compiler_path:
