@@ -217,18 +217,12 @@ class CmakeBuildTargetInFileCommand(sublime_plugin.TextCommand):
 
         self.view.window().show_quick_panel(targets, on_select=on_select)
 
-    # cmake add target with 'add_library()' and 'add_executable()' command
-    pattern = re.compile(r"(?:qt_)?add_(?:library|executable)\s*\(\s*([\w\-]+)")
-
     def scan_target(self) -> Iterator[str]:
-        for region in self.view.find_by_selector("entity.name.function"):
-            name = self.view.substr(region)
-            if name not in {"add_library", "add_executable", "qt_add_executable"}:
-                continue
-
-            line_str = self.view.substr(self.view.line(region))
-            if match := self.pattern.match(line_str.lstrip()):
-                yield match.group(1)
+        targets = []
+        # cmake add target with 'add_library()' and 'add_executable()' command
+        pattern = r"(?:qt_)?add_(?:library|executable)\s*\(\s*([\w\-]+)"
+        self.view.find_all(pattern, fmt="$1", extractions=targets)
+        yield from iter(targets)
 
     def is_visible(self, event: Optional[dict] = None) -> bool:
         return (not self.view.is_dirty()) and self.view.match_selector(
