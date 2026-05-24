@@ -62,21 +62,18 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
 
         use_presets = is_cmakepresets_exists(project_path)
         if use_presets:
-            params = cmake_commands.PresetParams(preset)
+            command = cmake_commands.PresetsCommand.configure(preset)
         else:
-            params = cmake_commands.ConfigureParams(
-                generator, omit_empty(cache_variables)
+            command = cmake_commands.Configure(
+                Path(project_path),
+                Path(project_path, build_prefix),
+                generator,
+                cache_variables,
             )
 
         OUTPUT_PANEL.show(clear=True)
-        project = cmake_commands.Project(
-            project_path,
-            OUTPUT_PANEL,
-            build_prefix=build_prefix,
-            environment=envs,
-            use_presets=use_presets,
-        )
-        project.configure(params)
+        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        runner.run(command.command())
 
     def is_enabled(self):
         return valid_build_source(self.view)
@@ -114,19 +111,16 @@ class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
 
         use_presets = is_cmakepresets_exists(project_path)
         if use_presets:
-            params = cmake_commands.PresetParams(preset)
+            command = cmake_commands.PresetsCommand.build(preset)
         else:
-            params = cmake_commands.BuildParams(target)
+            command = cmake_commands.Build(
+                Path(project_path, build_prefix),
+                target,
+            )
 
         OUTPUT_PANEL.show()
-        project = cmake_commands.Project(
-            project_path,
-            OUTPUT_PANEL,
-            build_prefix=build_prefix,
-            environment=envs,
-            use_presets=use_presets,
-        )
-        project.build(params, "--")
+        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        runner.run(command.command() + ["--"])
 
     def continue_unsaved_window(self, window: sublime.Window) -> bool:
         unsaved_views = [view for view in window.views() if view.is_dirty()]
@@ -176,19 +170,16 @@ class CmaketoolsTestCommand(sublime_plugin.TextCommand):
 
         use_presets = is_cmakepresets_exists(project_path)
         if use_presets:
-            params = cmake_commands.PresetParams(preset)
+            command = cmake_commands.PresetsCommand.test(preset)
         else:
-            params = cmake_commands.TestParams(test_regex)
+            command = cmake_commands.Test(
+                Path(project_path, build_prefix),
+                test_regex,
+            )
 
         OUTPUT_PANEL.show()
-        project = cmake_commands.Project(
-            project_path,
-            OUTPUT_PANEL,
-            build_prefix=build_prefix,
-            environment=envs,
-            use_presets=use_presets,
-        )
-        project.test(params)
+        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        runner.run(command.command())
 
     def is_enabled(self):
         return valid_build_source(self.view)
@@ -349,9 +340,9 @@ class CmakeRunScriptCommand(sublime_plugin.TextCommand):
             envs = settings.get("envs")
 
         OUTPUT_PANEL.show()
-        params = cmake_commands.ScriptParams(file_path)
-        project = cmake_commands.Project(project_path, OUTPUT_PANEL, environment=envs)
-        project.run_script(params)
+        command = cmake_commands.Script(file_path)
+        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        runner.run(command.command())
 
     def is_visible(self) -> bool:
         if file_name := self.view.file_name():

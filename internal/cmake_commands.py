@@ -1,219 +1,134 @@
 import shlex
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Any, Callable
+from typing import Dict, List, Any, Optional
 
 from .subprocess_helper import exec_subprocess, StreamWriter, ReturnCode
 
 
-CMakeCacheEntry = Dict[str, Any]
+def posix_path(path: str) -> str:
+    return Path(path).as_posix()
 
 
-class Params(ABC):
-    """"""
+@dataclass
+class Command:
+    """Command base"""
 
-    @abstractmethod
-    def to_arguments(self) -> List[str]:
+    def command(self) -> List[str]:
         """"""
+        raise NotImplementedError("'command()' not implemented")
 
 
 @dataclass
-class ConfigureParams(Params):
+class Configure(Command):
+    source: str = ""
+    build: str = ""
     generator: str = ""
-    cache_entry: CMakeCacheEntry = None
+    cache_entry: Dict[str, Any] = field(default_factory=dict)
+    toolchain: str = ""
+    install_prefix: str = ""
 
-    def to_arguments(self) -> List[str]:
-        arguments = []
+    def command(self) -> List[str]:
+        c = ["cmake"]
+        if self.source:
+            c.extend(["-S", f"{posix_path(self.source)}"])
+        if self.build:
+            c.extend(["-B", f"{posix_path(self.build)}"])
         if self.generator:
-            arguments.append(f"-G{shlex.quote(self.generator)}")
-
+            c.extend(["-G", f"{self.generator}"])
         if self.cache_entry:
-            for var, value in self.cache_entry.items():
-                arguments.append(f"-D{var}={shlex.quote(str(value))}")
-
-        return arguments
-
-
-@dataclass
-class BuildParams(Params):
-    target: str = "all"
-
-    def to_arguments(self) -> List[str]:
-        return ["--target", self.target]
-
-
-@dataclass
-class TestParams(Params):
-    regex: str = ""
-
-    def to_arguments(self) -> List[str]:
-        arguments = []
-        if self.regex:
-            arguments.append(f"-R{self.regex}")
-
-        return arguments
+            c.extend(
+                [
+                    f"-D{k}={shlex.quote(str(v))}"
+                    for k, v in self.cache_entry.items()
+                    if v
+                ]
+            )
+        if self.toolchain:
+            c.extend(["--toolchain", f"{self.toolchain}"])
+        if self.install_prefix:
+            c.extend(["--install-prefix", f"{self.install_prefix}"])
+        return c
 
 
 @dataclass
-class ScriptParams(Params):
-    path: Path
+class Build(Command):
+    build: str = ""
+    target: str = ""
 
-    def to_arguments(self) -> List[str]:
-        arguments = ["-P", str(self.path)]
-        return arguments
+    def command(self) -> List[str]:
+        c = ["cmake"]
+        if self.build:
+            c.extend(["--build", posix_path(self.build)])
+        else:
+            c.extend(["--build", "."])
+        if self.target:
+            c.extend(["--target", self.target])
+        return c
 
 
 @dataclass
-class PresetParams(Params):
-    preset_name: str
+class Test(Command):
+    build: str = ""
+    test_regex: str = ""
 
-    def to_arguments(self) -> List[str]:
-        arguments = ["--presets", self.preset_name]
-        return arguments
+    def command(self) -> List[str]:
+        c = ["ctest", "--output-on-failure"]
+        if self.build:
+            c.extend(["--test-dir", posix_path(self.build)])
+        if self.test_regex:
+            c.extend(["-R", self.test_regex])
+        return c
 
 
-class Project:
+@dataclass
+class Script(Command):
+    file: str
+
+    def command(self) -> List[str]:
+        return ["cmake", "-P", self.file]
+
+
+class PresetsCommand(Command):
+    cmd: List[str]
+    name: str
+
+    def command(self) -> List[str]:
+        if not isinstance(self.cmd, list):
+            raise ValueError("'cmd' must a list command")
+        self.cmd.extend(["--presets", self.name])
+
+    @classmethod
+    def configure(cls, presets: str):
+        return cls(["cmake"], presets)
+
+    @classmethod
+    def build(cls, presets: str):
+        return cls(["cmake", "--build"], presets)
+
+    @classmethod
+    def test(cls, presets: str):
+        return cls(["ctest"], presets)
+
+    @classmethod
+    def pack(cls, presets: str):
+        return cls(["cpack"], presets)
+
+
+class CommandRunner:
     """"""
 
     def __init__(
         self,
-        path: Path,
+        cwd: Path,
         output: StreamWriter,
-        *,
-        source_prefix: str = "",
-        build_prefix: str = "build",
-        environment: dict = None,
-        use_presets: bool = False,
+        environment: Optional[Dict[str, Any]] = None,
     ):
-        self.path = Path(path)
+        self.path = cwd
         self.output = output
         self.environment = environment
-        self.use_presets = use_presets
 
-        self.source_path = Path(path, source_prefix).resolve()
-        self.build_path = Path(path, build_prefix).resolve()
-
-    def get_command_func(self, name: str) -> Callable[[Params, str], ReturnCode]:
-        command_map = {
-            "legacy": {
-                "configure": self._configure,
-                "build": self._build,
-                "test": self._test,
-            },
-            "presets": {
-                "configure": self._configure_with_presets,
-                "build": self._build_with_presets,
-                "test": self._test_with_presets,
-            },
-        }
-
-        if self.use_presets:
-            return command_map["presets"][name]
-        return command_map["legacy"][name]
-
-    def configure(self, params: Params, arguments: str = "") -> ReturnCode:
-        return self.get_command_func("configure")(params, arguments)
-
-    def build(self, params: Params, arguments: str = "") -> ReturnCode:
-        return self.get_command_func("build")(params, arguments)
-
-    def test(self, params: Params, arguments: str = "") -> ReturnCode:
-        return self.get_command_func("test")(params, arguments)
-
-    def run_script(self, params: Params, arguments: str = "") -> ReturnCode:
-        return self._run_script(params, arguments)
-
-    def _configure(self, params: ConfigureParams, arguments: str = "") -> ReturnCode:
-        command = [
-            "cmake",
-            f"-S{self.source_path.as_posix()}",
-            f"-B{self.build_path.as_posix()}",
-        ]
-        command.extend(params.to_arguments())
-
-        if arguments:
-            command += shlex.split(arguments)
-
-        return self.run_command(command)
-
-    def _build(self, params: BuildParams, arguments: str = "") -> ReturnCode:
-        command = ["cmake", "--build", self.build_path.as_posix()]
-        command.extend(params.to_arguments())
-
-        if arguments:
-            command += shlex.split(arguments)
-
-        return self.run_command(command)
-
-    def _test(self, params: TestParams, arguments: str = "") -> ReturnCode:
-        command = [
-            "ctest",
-            "--test-dir",
-            self.build_path.as_posix(),
-            "--output-on-failure",
-        ]
-        command.extend(params.to_arguments())
-
-        if arguments:
-            command += shlex.split(arguments)
-
-        return self.run_command(command)
-
-    def _configure_with_presets(
-        self, params: PresetParams, arguments: str = ""
-    ) -> ReturnCode:
-        command = [
-            "cmake",
-            f"-S{self.source_path.as_posix()}",
-            f"-B{self.build_path.as_posix()}",
-        ]
-        command.extend(params.to_arguments())
-
-        if arguments:
-            command += shlex.split(arguments)
-
-        return self.run_command(command)
-
-    def _build_with_presets(
-        self, params: PresetParams, arguments: str = ""
-    ) -> ReturnCode:
-        command = ["cmake", "--build", self.build_path.as_posix()]
-        command.extend(params.to_arguments())
-
-        if arguments:
-            command += shlex.split(arguments)
-
-        return self.run_command(command)
-
-    def _test_with_presets(
-        self, params: PresetParams, arguments: str = ""
-    ) -> ReturnCode:
-        command = [
-            "ctest",
-            "--test-dir",
-            self.build_path.as_posix(),
-            "--output-on-failure",
-        ]
-        command.extend(params.to_arguments())
-
-        if arguments:
-            command += shlex.split(arguments)
-
-        return self.run_command(command)
-
-    def _run_script(self, params: ScriptParams, arguments: str = "") -> ReturnCode:
-        command = [
-            "cmake",
-        ]
-        command.extend(params.to_arguments())
-
-        if arguments:
-            command += shlex.split(arguments)
-
-        return self.run_command(command)
-
-    def run_command(self, command: List["str"]) -> ReturnCode:
+    def run(self, command: List["str"]) -> ReturnCode:
         self.output.write(f"exec: {shlex.join(command)}\n")
         return exec_subprocess(
             command,
