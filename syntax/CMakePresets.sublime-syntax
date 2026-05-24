@@ -1,0 +1,11 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/syntax.html
+file_extensions:
+  - CMakePresets.json
+
+scope: source.cmake_presets
+
+contexts:
+  main:
+    - include: scope:source.json
