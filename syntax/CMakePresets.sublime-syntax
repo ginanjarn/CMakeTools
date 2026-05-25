@@ -3,6 +3,7 @@
 # See http://www.sublimetext.com/docs/syntax.html
 file_extensions:
   - CMakePresets.json
+  - CMakeUserPresets.json
 
 scope: source.cmake_presets
 
