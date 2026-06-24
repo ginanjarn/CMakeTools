@@ -7,7 +7,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from io import StringIO
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 
 from .subprocess_helper import exec_subprocess, CaptureOption
 from .triple import TargetTriple, TargetTripleParser
@@ -31,8 +31,11 @@ class CompilerKit:
     generator: GeneratorStr
 
 
-class CompilerKitScanner:
+class KitScanner:
     """CompilerKit scanner"""
+
+    def __init__(self, search_path: Optional[str] = None) -> None:
+        self.search_path = search_path
 
     def scan(self) -> List[CompilerKit]:
         return list(self._scan())
@@ -52,13 +55,14 @@ class CompilerKitScanner:
         c_compiler = compiler_target["c_compiler"]
         cxx_compiler = compiler_target["cxx_compiler"]
 
-        cc_path = self._find_path(c_compiler)
+        cc_path = self._find_executable_path(c_compiler)
         if not cc_path:
             return None
 
         info = self._version_info(cc_path, compiler_target["version_switch"])
         triple = self._get_triple(info)
 
+        # resolve mingw gcc target executable
         if triple.libc == "mingw":
             cc_path = cc_path.replace("gcc", f"{triple.triple}-gcc")
 
@@ -66,8 +70,8 @@ class CompilerKitScanner:
         generator = self._get_generator(triple)
         return CompilerKit(c_compiler, cc_path, cxx_path, generator)
 
-    def _find_path(self, executable_name: str) -> PathStr:
-        return shutil.which(executable_name, mode=os.X_OK)
+    def _find_executable_path(self, name: str) -> PathStr:
+        return shutil.which(name, mode=os.X_OK, path=self.search_path)
 
     def _version_info(self, compiler_path: PathStr, version_switch: str) -> str:
         command = [compiler_path, version_switch]
@@ -83,7 +87,7 @@ class CompilerKitScanner:
     def _get_generator(self, triple: TargetTriple) -> GeneratorStr:
         """generator for specific target triple"""
 
-        if self._find_path("ninja"):
+        if self._find_executable_path("ninja"):
             return "Ninja"
         if triple.target_os == "msys":
             return "MSYS Makefiles"
@@ -92,7 +96,7 @@ class CompilerKitScanner:
         return ""
 
 
-def scan_compilers() -> List[CompilerKit]:
-    """scan installed compilers"""
-    scanner = CompilerKitScanner()
+def scan_kits(search_path: Optional[str]) -> List[CompilerKit]:
+    """scan installed compiler kits"""
+    scanner = KitScanner(search_path)
     return scanner.scan()

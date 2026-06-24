@@ -28,7 +28,14 @@ class CmaketoolsSetKitsCommand(sublime_plugin.WindowCommand):
 
     def _set_task(self):
         sublime.status_message("Scanning compilers...")
-        kit_items = kit.scan_compilers()
+
+        with sublime_settings.Settings() as settings:
+            try:
+                search_path = settings.get("envs")["PATH"]
+            except Exception:
+                search_path = None
+
+        kit_items = kit.scan_kits(search_path)
         sublime.status_message(f"{len(kit_items)} kits found.")
 
         titles = [f"[{item.name.upper()}] {item.c_compiler}" for item in kit_items]
