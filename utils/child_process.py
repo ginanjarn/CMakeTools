@@ -26,7 +26,15 @@ class CaptureOption(Enum):
     ALL = 8
 
 
-def exec_subprocess(
+if os.name == "nt":
+    # if on Windows, hide process window
+    STARTUPINFO = subprocess.STARTUPINFO()
+    STARTUPINFO.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
+else:
+    STARTUPINFO = None
+
+
+def run(
     command: List[str],
     output: StreamWriter,
     /,
@@ -63,11 +71,3 @@ def exec_subprocess(
         output.write(line.rstrip().decode() + "\n")
 
     return proc.wait()
-
-
-if os.name == "nt":
-    # if on Windows, hide process window
-    STARTUPINFO = subprocess.STARTUPINFO()
-    STARTUPINFO.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-else:
-    STARTUPINFO = None

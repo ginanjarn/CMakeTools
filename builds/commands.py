@@ -1,16 +1,149 @@
-import threading
 import re
-from dataclasses import dataclass
+import shlex
+import threading
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Dict, List, Any, Iterator, Optional
 
 import sublime
 import sublime_plugin
 
-from .internal import cmake_commands
-from .internal import sublime_settings
-from .internal.workspace import get_workspace_path
-from .internal.panels import OutputPanel
+from ..utils import sublime_settings
+from ..utils.workspace import get_workspace_path
+from ..utils.panels import OutputPanel
+from ..utils.child_process import run, StreamWriter, ReturnCode
+
+
+def posix_path(path: str) -> str:
+    return Path(path).as_posix()
+
+
+@dataclass
+class Command:
+    """Command base"""
+
+    def command(self) -> List[str]:
+        """"""
+        raise NotImplementedError("'command()' not implemented")
+
+
+@dataclass
+class Configure(Command):
+    source: str = ""
+    build: str = ""
+    generator: str = ""
+    cache_entry: Dict[str, Any] = field(default_factory=dict)
+    toolchain: str = ""
+    install_prefix: str = ""
+
+    def command(self) -> List[str]:
+        c = ["cmake"]
+        if self.source:
+            c.extend(["-S", f"{posix_path(self.source)}"])
+        if self.build:
+            c.extend(["-B", f"{posix_path(self.build)}"])
+        if self.generator:
+            c.extend(["-G", f"{self.generator}"])
+        if self.cache_entry:
+            c.extend(
+                [
+                    f"-D{k}={shlex.quote(str(v))}"
+                    for k, v in self.cache_entry.items()
+                    if v
+                ]
+            )
+        if self.toolchain:
+            c.extend(["--toolchain", f"{self.toolchain}"])
+        if self.install_prefix:
+            c.extend(["--install-prefix", f"{self.install_prefix}"])
+        return c
+
+
+@dataclass
+class Build(Command):
+    build: str = ""
+    target: str = ""
+
+    def command(self) -> List[str]:
+        c = ["cmake"]
+        if self.build:
+            c.extend(["--build", posix_path(self.build)])
+        else:
+            c.extend(["--build", "."])
+        if self.target:
+            c.extend(["--target", self.target])
+        return c
+
+
+@dataclass
+class Test(Command):
+    build: str = ""
+    test_regex: str = ""
+
+    def command(self) -> List[str]:
+        c = ["ctest", "--output-on-failure"]
+        if self.build:
+            c.extend(["--test-dir", posix_path(self.build)])
+        if self.test_regex:
+            c.extend(["-R", self.test_regex])
+        return c
+
+
+@dataclass
+class Script(Command):
+    file: str
+
+    def command(self) -> List[str]:
+        return ["cmake", "-P", self.file]
+
+
+class PresetsCommand(Command):
+    cmd: List[str]
+    name: str
+
+    def command(self) -> List[str]:
+        if not isinstance(self.cmd, list):
+            raise ValueError("'cmd' must a list command")
+        self.cmd.extend(["--presets", self.name])
+
+    @classmethod
+    def configure(cls, presets: str):
+        return cls(["cmake"], presets)
+
+    @classmethod
+    def build(cls, presets: str):
+        return cls(["cmake", "--build"], presets)
+
+    @classmethod
+    def test(cls, presets: str):
+        return cls(["ctest"], presets)
+
+    @classmethod
+    def pack(cls, presets: str):
+        return cls(["cpack"], presets)
+
+
+class CommandRunner:
+    """"""
+
+    def __init__(
+        self,
+        cwd: Path,
+        output: StreamWriter,
+        environment: Optional[Dict[str, Any]] = None,
+    ):
+        self.path = cwd
+        self.output = output
+        self.environment = environment
+
+    def run(self, command: List["str"]) -> ReturnCode:
+        self.output.write(f"exec: {shlex.join(command)}\n")
+        return run(
+            command,
+            self.output,
+            cwd=self.path,
+            env=self.environment,
+        )
 
 
 def valid_build_source(view: sublime.View):
@@ -19,7 +152,7 @@ def valid_build_source(view: sublime.View):
     return view.match_selector(0, "source.cmake,source.c++,source.c")
 
 
-OUTPUT_PANEL = OutputPanel()
+OUTPUT_PANEL = OutputPanel("cmaketools")
 
 
 def show_workspace_error(error: Exception):
@@ -62,17 +195,17 @@ class CmaketoolsConfigureCommand(sublime_plugin.TextCommand):
 
         use_presets = is_cmakepresets_exists(project_path)
         if use_presets:
-            command = cmake_commands.PresetsCommand.configure(preset)
+            command = PresetsCommand.configure(preset)
         else:
-            command = cmake_commands.Configure(
+            command = Configure(
                 Path(project_path),
                 Path(project_path, build_prefix),
                 generator,
                 cache_variables,
             )
 
-        OUTPUT_PANEL.show(clear=True)
-        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        OUTPUT_PANEL.show()
+        runner = CommandRunner(project_path, OUTPUT_PANEL, envs)
         runner.run(command.command())
 
     def is_enabled(self):
@@ -111,15 +244,15 @@ class CmaketoolsBuildCommand(sublime_plugin.TextCommand):
 
         use_presets = is_cmakepresets_exists(project_path)
         if use_presets:
-            command = cmake_commands.PresetsCommand.build(preset)
+            command = PresetsCommand.build(preset)
         else:
-            command = cmake_commands.Build(
+            command = Build(
                 Path(project_path, build_prefix),
                 target,
             )
 
         OUTPUT_PANEL.show()
-        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        runner = CommandRunner(project_path, OUTPUT_PANEL, envs)
         runner.run(command.command() + ["--"])
 
     def continue_unsaved_window(self, window: sublime.Window) -> bool:
@@ -170,15 +303,15 @@ class CmaketoolsTestCommand(sublime_plugin.TextCommand):
 
         use_presets = is_cmakepresets_exists(project_path)
         if use_presets:
-            command = cmake_commands.PresetsCommand.test(preset)
+            command = PresetsCommand.test(preset)
         else:
-            command = cmake_commands.Test(
+            command = Test(
                 Path(project_path, build_prefix),
                 test_regex,
             )
 
         OUTPUT_PANEL.show()
-        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        runner = CommandRunner(project_path, OUTPUT_PANEL, envs)
         runner.run(command.command())
 
     def is_enabled(self):
@@ -340,8 +473,8 @@ class CmakeRunScriptCommand(sublime_plugin.TextCommand):
             envs = settings.get("envs")
 
         OUTPUT_PANEL.show()
-        command = cmake_commands.Script(file_path)
-        runner = cmake_commands.CommandRunner(project_path, OUTPUT_PANEL, envs)
+        command = Script(file_path)
+        runner = CommandRunner(project_path, OUTPUT_PANEL, envs)
         runner.run(command.command())
 
     def is_visible(self) -> bool:

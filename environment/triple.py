@@ -1,5 +1,4 @@
-"""target triple helper
-"""
+"""target triple helper"""
 
 import re
 from dataclasses import dataclass

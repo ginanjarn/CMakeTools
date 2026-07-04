@@ -1,0 +1,6 @@
+[
+	{
+		"caption": "CMake: Quickstart...",
+		"command": "cmaketools_quickstart"
+	}
+]

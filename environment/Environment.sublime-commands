@@ -1,0 +1,6 @@
+[
+	{
+		"caption": "CMake: Set Compiler Kits...",
+		"command": "cmaketools_set_kits"
+	},
+]
